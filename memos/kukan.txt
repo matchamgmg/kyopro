@@ -1,0 +1,21 @@
+区間の共通部分
+[a,b] AND [c,d]
+......a______b....c-----d...
+.....a____c=====b-----d.....
+.....a____c=====d_____b.....
+....c-----d......a_____b....
+....c-----a=====d_____b.....
+....c-----a====b-----d......
+if(max(a,c)<=min(b,d)) true;
+else false;
+
+累積和
+int N;
+vector<int> A(N);
+vector<int> SA(N+1);
+SA[0] = 0;
+rep(i,0,N){
+    SA[i+1] = SA[i] + A[i]; //SA[i] = sum_{k=0}^{i-1} A[k];
+}
+int l,r;    //[l, r) = [l, r-1]の和
+int sumlr = SA[r] - SA[l];  //[0,r-1] - [0, l-1] = [l,r-1]

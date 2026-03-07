@@ -1,0 +1,46 @@
+二分探索
+判定問題に帰着させる
+
+bool P(int idx){
+    // l: false
+    // r: true
+    // l < M <= r
+
+    if(idx < M) return false;
+    else if(idx >= M) return true;
+}
+
+int binary_search(){
+    int left, right;    //P(left) = false, P(right) = true
+
+    while(right -left > 1){
+        int mid = left + (right - left) / 2;
+        if(P(mid)) right = mid;
+        else left = mid;
+    }
+
+    return right;
+}
+
+スコアの最小値を求めよ
+スコアをx以下にできるか
+
+最大値の最小化
+すべてのスコアをx以下にできるか
+
+std::lower_bound(first, last, T &value, [](T &e, T &value){ e *** value});
+返り値　itr
+comp(e, value) = false となる最小のイテレータを返す
+[first, itr) となるすべてのjについて，comp(e, value) != false
+つまり，比較関数に <=, >= は不適切
+
+配列はcomp(e, value) == trueによって整列されている
+
+upper_bound
+配列はcomp(value, e) == true によって整列されている
+[first, itr) となるすべてのjについて，comp(e, value) == false
+
+総じて，比較関数に用いる > < は，昇順，降順どちらで整列しているかの身によってきまる
+昇順 <
+降順 >
+また，比較関数の引数は，非const参照禁止

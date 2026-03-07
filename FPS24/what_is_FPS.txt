@@ -1,0 +1,21 @@
+母関数 G.f. Generating function
+    数列の情報を保持する関数のような形をしたもの
+    数列a_0,a_1,a_2,...にたいして母関数A(x):=a_0+a_1x+a_2x^2+...=sum_{i=0}^{\infty}{a_ix^i}
+    (通常型母関数 ordinary GF)
+
+形式的冪級数 formal power series, FPS
+    項が無限に続いてもよい多項式
+    ※関数ではない
+        収束半径などの解析的な議論は不要
+
+形式的冪級数の係数を取り出す記号
+    [x^n]A(x):=a_n
+
+指数型母関数 exponential generating function, EGF
+    A\hat(x)=sum{n=0}^{\infty}{frac{a_n}{n!}x^n}
+    [frac{x^n}{n!}]A\hat(x):=a_n
+
+    [frac{x^k}{k!}]A\hat(x)B\hat(x)
+    =[frac{x^k}{k!}](sum_{i=0}^{\infty}{frac{a_i}{i!}x^i})(sum_{j=0}^{\infty}{frac{b_j}{j!}x^j})
+    =k!\sum_{i+j=k}{frac{a_i}{i!}frac{bj}{j!}}
+    =sum_{i+j=k}{\binary{k}{i}{a_ib_j}}

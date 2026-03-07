@@ -1,0 +1,119 @@
+関数オブジェクト(ラムダ ファンクタ 関数ポインタ)
+
+ラムダ式(lambda expression){
+    関数オブジェクトを簡易的に定義するための機能
+    auto f = [](int v){ return v*2; };
+    f(3);   //6
+
+    無名関数の即時使用
+    int i=0;
+    [&]{ i=9; }();  //この順番
+    i;  //9
+
+    クロージャー
+    int j=0;
+    auto f = [&j]{return j++;}; //auto f = [&j](){return j++;}; も可
+    f();    //0
+    f();    //1
+
+    ラムダ式の評価結果 = クロージャーオブジェクト
+        関数ポインタへの変換機能を持つ
+    
+    標準ライブラリでの活用
+        std::vector<int> v = {1, 2, 3};
+        std::for_each(v.begin(), v.end(), [](int i){
+            printf("%d", i);
+        }); //"123"
+}
+
+ファンクタ(functor){
+    クラスのoperator()演算子をオーバーロードすることで、
+    クラスのインスタンスに対して関数と同等のふるまいをさせることができる
+
+    struct Functor {
+        int operator()(int v) { return v*2; }   //関数呼び出し演算子を再定義
+    };
+    Functor fn = Functor();
+    fn(3);  //6
+
+    メンバ変数を活用すれば、関数に状態を持たせることも可能
+    struct Functor {
+        int i;
+        Functor(int i) : i(i) {}
+        int operator()(int v) { return v*i++; }
+    };
+    Functor fn = Functor(1);
+    fn(3);  //3
+    fn(3);  //6
+    fn(3);  //9
+
+    標準ライブラリでの活用(ラムダ式と同様)
+    struct Print {
+        void operator()(int i) { std::cout << i; }
+    };
+    std::vector<int> v = {1, 2, 3};
+    std::for_each(v.begin(), v.end(), Print()); //"123"
+}
+
+関数ポインタ(function pointer){
+    関数へのポインタ
+    厳密には関数オブジェクトではない
+
+    int function(int i) { return v*2; }
+    int(*fn)(int) = function;
+    fn(3);  //6
+
+    標準ライブラリは関数ポインタにも対応
+    const char* a[] = {"hello", "world"};
+    std::for_each(std::begin(a), std::end(a), puts);    //"hello world"
+}
+
+ブロック(Blocks){
+    Apple製コンパイラ(Apple LLVM)のC言語拡張機能
+    利用用途はラムダ式とほぼ同じ
+}
+
+std::function{
+    関数オブジェクトを保持する
+
+    std::function<int(int)> fn = [](int v) { return v*2; };
+    fn(3);  //6
+
+    std::function<int(int)> gn = issapce;
+    gn('\n');   //1 (true)
+
+    引数型として利用すれば、関数オブジェクトを関数間でやり取りできる
+    std::function<int(int)> get() { return [](int v) { return v*2; }; } //関数オブジェクト
+    int call(std::function<int(int)> fn) { return fn(3); }  //関数オブジェクトを引数にとる関数
+    int v = call(get());    //6
+
+    std::functionはラムダ式だけでなく、ファンクタ、関数ポインタ、ブロックを
+    保持することもできる
+
+    std::function<int(int)> functor = Functor();
+    functor(3); //6
+
+    std::function<int(int)> funcPtr = function;
+    funcPtr(3); //6
+
+}
+
+関数を引数に渡す{
+    テンプレート
+    template<class Fn> int call(Fn fn) {
+        return fn(3);
+    }
+
+    std::function
+    int call(std::function<int(int)> fn) {
+        return fn(3);
+    }
+
+    関数ポインタ
+    int call(int(*fn)(int)) {
+        return fn(3);
+    }
+
+    キャプチャーなしのラムダ式は関数ポインタとして渡せる
+    call([](int v) { return v*2; });    //6
+}
