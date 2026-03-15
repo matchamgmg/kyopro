@@ -78,56 +78,20 @@ int main()
     ll L, R, D, U;
     cin >> L >> R >> D >> U;
 
-    auto f = [&](ll X) -> ll
-    {
-        ll res = 0;
-        for (ll x = 2; x <= X; x += 2)
-        {
-            res += min(x, U) - max(-x, D) + 1;
-        }
-        return res;
-    };
-    auto g = [&](ll Y) -> ll
-    {
-        ll res = 0;
-        for (ll y = 2; y <= Y; y += 2)
-        {
-            res += min(y, R) - max(-y, L) - 1;
-        }
-        return res;
-    };
-
     ll ans = 0;
-
-    if (L > 0)
+    for (ll x = L; x <= R; ++x)
     {
-        ans += f(R) - f(L - 1);
+        if (abs(x) & 1)
+            continue;
+        if (x == 0)
+            continue;
+        ans += max(0LL, min(abs(x) - 1, U) - max(-abs(x) + 1, D) + 1);
     }
-    else if (R < 0)
+    for (ll y = D; y <= U; ++y)
     {
-        ans += f(-L) - f(-R - 1);
-    }
-    else
-    {
-        ans += f(R) + f(-L);
-    }
-
-    if (D > 0)
-    {
-        ans += g(U) - g(D - 1);
-    }
-    else if (U < 0)
-    {
-        ans += g(-D) - g(-U - 1);
-    }
-    else
-    {
-        ans += g(U) + g(-D);
-    }
-
-    if (L <= 0 && R >= 0 && U >= 0 && D <= 0)
-    {
-        ans++;
+        if (abs(y) & 1)
+            continue;
+        ans += max(0LL, min(abs(y), R) - max(-abs(y), L) + 1);
     }
     cout << ans << endl;
 }

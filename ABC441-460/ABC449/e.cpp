@@ -70,6 +70,57 @@ bool chmin(T &a, T b)
     }
 }
 
+template <class T>
+struct BIT
+{
+    int n;
+    vector<T> data;
+    BIT(int n_) : n(n_), data(n_ + 1) {}
+
+    void add(int p, T x = 1)
+    {
+        for (++p; p <= n; p += p & -p)
+        {
+            data[p] += x;
+        }
+    }
+
+    // [0, p)
+    T sum(int p)
+    {
+        T res = 0;
+        for (; p > 0; p -= p & -p)
+        {
+            res += data[p];
+        }
+        return res;
+    }
+
+    // [l, r)
+    T sum(int l, int r)
+    {
+        return sum(r) - sum(l);
+    }
+
+    // binary_search
+    int get_kth(T k)
+    {
+        int w = 1, i = 0;
+        while (w < n)
+        {
+            w <<= 1;
+        }
+        for (++w; w > 0; w >>= 1)
+        {
+            if (i + w > n)
+                continue;
+            if (data[i + w] < k + 1)
+                k -= data[i += w];
+        }
+        return i;
+    }
+};
+
 int main()
 {
     ios::sync_with_stdio(false);
@@ -78,42 +129,67 @@ int main()
     int N, M;
     cin >> N >> M;
     vector<int> A(N);
-    rep(i, 0, N) cin >> A[i];
-    rep(i, 0, N) A[i]--;
-    vector<ll> cnt(M, 0);
-    rep(i, 0, N)
-    {
-        cnt[A[i]]++;
-    }
-    ll max_A = *max_element(all(cnt));
-    vector<int> idx(M);
-    iota(all(idx), 0);
-    sort(all(idx), [&](int i, int j)
-         { return cnt[i] == cnt[j] ? i < j : cnt[i] < cnt[j]; });
-    vector<ll> B(M + 1, 0);
-    B[0] = N;
-    rep(i, 0, M)
-    {
-        B[i + 1] = B[i] + (cnt[idx[i + 1]] - cnt[idx[i]]) * (i + 1);
-    }
-    const ll INF = 2e18;
-    B.emplace_back(INF);
+    rep(i, 0, N) cin >> A[i], A[i]--;
     int Q;
     cin >> Q;
-    vector<ll> query(Q);
-    rep(q, 0, Q) cin >> query[q];
-    rep(q, 0, Q)
+    vector<int> ans(Q);
+    vector<pair<ll, int>> Qs;
+    rep(qi, 0, Q)
     {
         ll X;
         cin >> X;
-        ll k = lower_bound(all(B), X) - B.begin();
-        if (k == 0)
+        X--;
+        if (X < N)
         {
-            cout << A[X - 1] + 1 << endl;
+            ans[qi] = A[X];
         }
         else
         {
-            cout << idx[(X - 1 - B[k - 1]) % k] << endl;
+            Qs.emplace_back(X, qi);
         }
+    }
+    sort(rall(Qs));
+
+    // 出現頻度が同じものをまとめる
+    vector<vector<int>> adds(N + 1);
+    {
+        vector<int> cnt(M, 0);
+        rep(i, 0, N)
+        {
+            cnt[A[i]]++;
+        }
+        rep(i, 0, M)
+        {
+            adds[cnt[i]].push_back(i);
+        }
+    }
+
+    BIT<int> ft(M);
+    int num = 0;
+    ll l = N;
+    rep(c, 0, N + 1)
+    {
+        for (int i : adds[c])
+        {
+            ft.add(i);
+            num++;
+        }
+        while (Qs.size() > 0 && Qs.back().first < l + num)
+        {
+            auto [X, qi] = Qs.back();
+            Qs.pop_back();
+            ans[qi] = ft.get_kth(X - l);
+        }
+        l += num;
+    }
+    while (Qs.size())
+    {
+        auto [X, qi] = Qs.back();
+        Qs.pop_back();
+        ans[qi] = (X - l) % M;
+    }
+    rep(i, 0, Q)
+    {
+        cout << ans[i] + 1 << endl;
     }
 }
