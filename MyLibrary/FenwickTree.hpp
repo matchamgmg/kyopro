@@ -23,7 +23,12 @@ functions:
 
     定義域[0,N-1]の整数を要素とする，順序付き多重集合Sを考える
     A[i] : Sにおける要素iの個数
-    get_Kth_element(k:T) -> int : Sのk番目(K >= 1)の要素の取得
+    get_Kth_element(k:T) -> int : Sのk番目(k >= 1)の要素の取得
+
+補足:
+    upper_boundがlower_boundにより実装されているため，
+    整数値のデータ型に対する二分探索のみを想定
+    (lower_boundを経由しないupper_boundの実装がわからなかった)
 */
 
 #include <vector>
