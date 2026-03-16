@@ -4,8 +4,6 @@ using namespace std;
 template <class T>
 struct BIT
 {
-    int n;
-    vector<T> data;
     BIT(int n_) : n(n_), data(n_ + 1) {}
 
     void add(int p, T x = 1)
@@ -17,7 +15,7 @@ struct BIT
     }
 
     // [0, p)
-    T sum(int p)
+    T prefix_sum(int p)
     {
         T res = 0;
         for (; p > 0; p -= p & -p)
@@ -30,11 +28,12 @@ struct BIT
     // [l, r)
     T sum(int l, int r)
     {
-        return sum(r) - sum(l);
+        return prefix_sum(r) - prefix_sum(l);
     }
 
     // binary_search
     // sum[0,k] >= v となる最小のkを返す
+    // 存在しない場合はn
     int lower_bound(T v)
     {
         int w = 1, i = 0;
@@ -58,10 +57,10 @@ struct BIT
         return lower_bound(v + 1);
     }
 
-    // sum[0,k] > v となる最小のkを返す
+    // sum[0,k] >= v となる最小のkを返す
     int min_left(T v)
     {
-        return lower_bound(v + 1);
+        return lower_bound(v);
     }
 
     // sum[0, k] <= v となる最大のkを返す
@@ -72,22 +71,34 @@ struct BIT
     }
 
     // K番目の要素を取得
-    int get_Kth_element(T v)
+    int get_Kth_element(T k)
     {
-        return lower_bound(v);
+        return lower_bound(k);
     }
+
+private:
+    int n;
+    std::vector<T> data;
 };
 
 int main()
 {
     int N = 10;
     BIT<int> ft(N);
-    for (int i = 0; i < N; ++i)
+    for (int i = 1; i < N; ++i)
     {
-        ft.add(i, i + 1);
+        ft.add(i);
     }
-    std::cout << ft.sum(0) << std::endl;
-    std::cout << ft.sum(1, 2) << std::endl;
+    for (int i = 1; i <= N; ++i)
+    {
+        std::cout << ft.sum(i) << ' ';
+    }
+    std::cout << std::endl;
+    for (int i = 0; i < N * N; ++i)
+    {
+        std::cout << ft.lower_bound(i) << ' ';
+    }
+    std::cout << std::endl;
     BIT<int> ft2(N);
     ft2.add(0, 1);
     ft2.add(1, 1);

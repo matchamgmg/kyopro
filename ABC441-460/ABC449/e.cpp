@@ -73,8 +73,6 @@ bool chmin(T &a, T b)
 template <class T>
 struct BIT
 {
-    int n;
-    vector<T> data;
     BIT(int n_) : n(n_), data(n_ + 1) {}
 
     void add(int p, T x = 1)
@@ -86,7 +84,7 @@ struct BIT
     }
 
     // [0, p)
-    T sum(int p)
+    T prefix_sum(int p)
     {
         T res = 0;
         for (; p > 0; p -= p & -p)
@@ -99,11 +97,13 @@ struct BIT
     // [l, r)
     T sum(int l, int r)
     {
-        return sum(r) - sum(l);
+        return prefix_sum(r) - prefix_sum(l);
     }
 
     // binary_search
-    int get_kth(T k)
+    // sum[0,k] >= v となる最小のkを返す
+    // 存在しない場合はn
+    int lower_bound(T v)
     {
         int w = 1, i = 0;
         while (w < n)
@@ -114,11 +114,40 @@ struct BIT
         {
             if (i + w > n)
                 continue;
-            if (data[i + w] < k + 1)
-                k -= data[i += w];
+            if (data[i + w] < v)
+                v -= data[i += w];
         }
         return i;
     }
+
+    // sum[0,k] > v となる最小のkを返す
+    int upper_bound(T v)
+    {
+        return lower_bound(v + 1);
+    }
+
+    // sum[0,k] >= v となる最小のkを返す
+    int min_left(T v)
+    {
+        return lower_bound(v);
+    }
+
+    // sum[0, k] <= v となる最大のkを返す
+    // 存在しない場合は-1
+    int max_right(T v)
+    {
+        return lower_bound(v + 1) - 1;
+    }
+
+    // K番目の要素を取得
+    int get_Kth_element(T k)
+    {
+        return lower_bound(k);
+    }
+
+private:
+    int n;
+    std::vector<T> data;
 };
 
 int main()
@@ -178,7 +207,7 @@ int main()
         {
             auto [X, qi] = Qs.back();
             Qs.pop_back();
-            ans[qi] = ft.get_kth(X - l);
+            ans[qi] = ft.get_Kth_element(X - l + 1);
         }
         l += num;
     }
