@@ -23,7 +23,7 @@ functions:
 
     定義域[0,N-1]の整数を要素とする，順序付き多重集合Sを考える
     A[i] : Sにおける要素iの個数
-    get_Kth_element(k:T) -> int : Sのk番目の要素の取得
+    get_Kth_element(k:T) -> int : Sのk番目(K >= 1)の要素の取得
 */
 
 #include <vector>
