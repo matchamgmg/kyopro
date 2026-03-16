@@ -67,12 +67,86 @@ bool chmin(T &a, T b)
         return false;
 }
 
-// 下から見て sum c*10^(d+l)
+// 各レピュニット数をpMで割った余りを、ダブリングにより求める
+// 2^k 桁のレピュニット数
 
 int main()
 {
     ios::sync_with_stdio(false);
     cin.tie(nullptr);
 
-    const int MOD = 10007;
+    ll mod_p = 10007;
+    ll K, M;
+    cin >> K >> M;
+    ll mod_pm = mod_p * M;
+    ll N = 0;
+
+    ll l_max = 1e9;
+    vector<ll> repunit_mod_pm(1, 1);
+    ll d = 1;
+    ll TEN = 10;
+    while (d <= l_max)
+    {
+        ll r = repunit_mod_pm.back();
+        repunit_mod_pm.emplace_back((r * TEN % mod_pm + r) % mod_pm);
+        TEN *= TEN;
+        TEN %= mod_pm;
+        d <<= 1;
+    }
+
+    auto mod_pow = [mod_pm](ll a, ll n) -> ll
+    {
+        ll res = 1;
+        while (n > 0)
+        {
+            if (n & 1)
+            {
+                res *= a;
+                res %= mod_pm;
+            }
+            a *= a;
+            a %= mod_pm;
+            n >>= 1;
+        }
+        return res;
+    };
+
+    TEN = 1;
+    vector<pair<ll, ll>> query(K);
+    rep(k, 0, K)
+    {
+        cin >> query[k].first >> query[k].second;
+    }
+    rrep(k, 0, K)
+    {
+        ll C = query[k].first, L = query[k].second;
+
+        ll N_i = (C * TEN) % mod_pm;
+        ll l = L;
+        ll TEN2 = 1;
+        ll TEN3 = 10;
+        ll repunit = 0;
+        int i = 0;
+        while (l > 0)
+        {
+            if (l & 1)
+            {
+                repunit += (repunit_mod_pm[i] * TEN2) % mod_pm;
+                repunit %= mod_pm;
+                TEN2 *= TEN3;
+                TEN2 %= mod_pm;
+            }
+            TEN3 *= TEN3;
+            TEN3 %= mod_pm;
+            ++i;
+            l >>= 1;
+        }
+        N_i *= repunit;
+        N_i %= mod_pm;
+        N += N_i;
+        N %= mod_pm;
+        TEN *= TEN2;
+        TEN %= mod_pm;
+    }
+    cout << N / M << endl;
 }
