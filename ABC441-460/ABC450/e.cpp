@@ -70,81 +70,12 @@ bool chmin(T &a, T b)
     }
 }
 
-// S_k に含まれるXの個数
+// S_{infty} の Z 番目の文字をC_{infty}(Z)とおく
+// |S_{n}| < Z を満たす最大のnについて
+// C_{infty}(Z) = C_{n-1}(Z-|S_{n}|)
 
 int main()
 {
     ios::sync_with_stdio(false);
     cin.tie(nullptr);
-
-    string X, Y;
-    cin >> X >> Y;
-
-    ll x = X.size(), y = Y.size();
-    ll max_len = 1e18;
-
-    auto Mul = [](const vector<vector<ll>> &a, const vector<vector<ll>> &b) -> vector<vector<ll>> &
-    {
-        vector<vector<ll>> res = {{0, 0}, {0, 0}};
-        rep(i, 0, 2)
-        {
-            rep(j, 0, 2)
-            {
-                rep(k, 0, 2)
-                {
-                    res[i][j] += a[i][k] * b[k][j];
-                }
-            }
-        }
-        return res;
-    };
-
-    vector<vector<ll>> base = {{1, 1}, {1, 0}},
-                       I = {{1, 0}, {0, 1}};
-    vector<vector<vector<ll>>> doubling;
-    doubling.emplace_back(I);
-    doubling.emplace_back(base);
-    while (doubling.back()[0][0] * y + doubling.back()[0][1] * x <= max_len)
-    {
-        doubling.emplace_back(Mul(doubling.back(), doubling.back()));
-    }
-    int Q;
-    cin >> Q;
-    int siz = doubling.size();
-
-    map<ll, pair<ll, ll>> mp;
-
-    auto f = [&](auto f, ll Z, char C) -> ll
-    {
-        if (mp.contains(Z))
-        {
-            ll k = mp[Z].first;
-            while (k > 0)
-            {
-            }
-        }
-        ll k = siz - 1;
-        ll kk = 0;
-        vector<vector<ll>> arr = I;
-        while (k >= 0)
-        {
-            vector<vector<ll>> temp = Mul(arr, doubling[k]);
-            if (temp[0][0] * y + temp[0][1] * x < Z)
-            {
-                arr = temp;
-                kk += 1LL << k;
-            }
-            k--;
-        }
-    };
-
-    rep(q, 0, Q)
-    {
-        ll L, R;
-        char C;
-        cin >> L >> R >> C;
-        L--;
-        ll ans = f(R, C) - f(L, C);
-        cout << ans << '\n';
-    }
 }
