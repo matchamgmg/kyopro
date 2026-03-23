@@ -61,7 +61,7 @@ F_{n}   & F_{n-1}
 \end{pmatrix}
 ^{n}
 ```
-$F_1 = x, ~ F_2 = y$のとき，$F_0 = y-x, ~ F_{-1} = 2x - y$より
+$F_1 = x, ~ F_2 = y$のとき，$F_0 = y-x$より
 ```math
 \begin{pmatrix}
 F_{n+1} & F_{n} \\
@@ -72,11 +72,28 @@ F_{n}   & F_{n-1}
 1 & 1 \\
 1 & 0
 \end{pmatrix}
-^{n}
+^{n-1}
 \times
 \begin{pmatrix}
-x & y-x \\
-y-x & 2x-y
+y & x \\
+x & y-x
+\end{pmatrix}
+```
+```math
+\begin{pmatrix}
+F_{n} & F_{n-1} \\
+F_{n-1}   & F_{n-2}
+\end{pmatrix}
+=
+\begin{pmatrix}
+1 & 1 \\
+1 & 0
+\end{pmatrix}
+^{n-2}
+\times
+\begin{pmatrix}
+y & x \\
+x & y-x
 \end{pmatrix}
 ```
 
