@@ -7,10 +7,10 @@ template <class T, int size_ = 2>
 struct SqMatrix
 {
     // 0行列として初期化
-    SqMatrix(T x = 0) : mat(std::vector<T>(size_ * size_, x)) {}
+    SqMatrix(T x = T{}) : mat(std::vector<T>(size_ * size_, x)) {}
 
     // xで埋める
-    void Fill(T &x)
+    void Fill(const T &x)
     {
         mat.assign(size_ * size_, x);
     }
@@ -19,10 +19,10 @@ struct SqMatrix
     void InitIdentity()
     {
         int i = 0;
-        mat.assign(size_ * size_, 0);
+        mat.assign(size_ * size_, T{});
         while (i < size_ * size_)
         {
-            mat[i] = 1;
+            mat[i] = T{1};
             i += size_ + 1;
         }
     }
@@ -156,17 +156,17 @@ struct SqMatrix
     SqMatrix<T, size_> &operator*=(const SqMatrix<T, size_> &rhs) &
     {
         SqMatrix<T, size_> res;
-        std::swap(res.mat, this->mat);
         for (int i = 0; i < size_; ++i)
         {
             for (int j = 0; j < size_; ++j)
             {
                 for (int k = 0; k < size_; ++k)
                 {
-                    mat[i * size_ + j] += res.mat[i * size_ + k] * rhs.mat[k * size_ + j];
+                    res.mat[i * size_ + j] += mat[i * size_ + k] * rhs.mat[k * size_ + j];
                 }
             }
         }
+        std::swap(res.mat, this->mat);
         return *this;
     }
 
@@ -200,4 +200,9 @@ int main()
     std::cout << b[0, 0] << std::endl;
     b *= 3;
     std::cout << b[0, 0] << std::endl;
+    a = 1;
+    std::cout << a[0, 0] << std::endl;
+    a *= a;
+    a *= a;
+    std::cout << a[0, 0] << a[0, 1] << std::endl;
 }
