@@ -1,6 +1,6 @@
 #include <iostream>
 #include <vector>
-#include <cmath>
+#include <utility>
 
 // n*n 正方行列
 template <class T, int size_ = 2>
