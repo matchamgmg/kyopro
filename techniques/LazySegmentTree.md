@@ -77,6 +77,40 @@ S mapping(F f, S x){ return {x.val + x.siz * f, x.siz}; }
 F composition(F f, F g){ return f+g; }
 F id(){ return 0; }
 ```
+### 区間に対して一次関数を適用・一点取得・積分値取得（区間和取得）
+```C++
+template <class T>
+struct S
+{
+    T val;
+    int siz;
+    S() {}
+    S(T v, int s) : val(v), siz(s) {}
+};
+template <class T>
+struct F
+{
+    T times;
+    T plus;
+    F() {}
+    F(T t, T p) : times(t), plus(p) {}
+};
+template <class T>
+S<T> op(S<T> a, S<T> b) { return {a.val + b.val, a.siz + b.siz}; }
+template <class T>
+S<T> e() { return {T{0}, 0}; }
+template <class T>
+S<T> mapping(F<T> f, S<T> x) { return {x.val * f.times + x.siz * f.plus, x.siz}; }
+template <class T>
+F<T> composition(F<T> f, F<T> g) { return {f.times * g.times, f.times * g.plus + f.plus}; }
+template <class T>
+F<T> id() { return {T{1}, T{0}}; }
+
+using T = int
+
+vector<S<T>> v(N + 1, {0, 1});
+lazy_segtree<S<T>, op<T>, e<T>, F<T>, mapping<T>, composition<T>, id<T>> seg(v);
+```
 ### 区間変更・区間最小値取得
 ```C++
 using S = long long;
