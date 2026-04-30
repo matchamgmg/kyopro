@@ -28,6 +28,8 @@ int binary_search(){
 最大値の最小化
 すべてのスコアをx以下にできるか
 
+// 1,2,3,4,5 key = 3
+
 std::lower_bound(first, last, T &value, [](T &e, T &value){ e *** value});
 返り値　itr
 comp(e, value) = false となる最小のイテレータを返す
@@ -40,7 +42,7 @@ upper_bound
 配列はcomp(value, e) == true によって整列されている
 [first, itr) となるすべてのjについて，comp(e, value) == false
 
-総じて，比較関数に用いる > < は，昇順，降順どちらで整列しているかの身によってきまる
+総じて，比較関数に用いる > < は，昇順，降順どちらで整列しているかのみによってきまる
 昇順 <
 降順 >
 また，比較関数の引数は，非const参照禁止
