@@ -10,15 +10,14 @@
 
 #include <bits/stdc++.h>
 
-template <class T, class F> struct SparseTable {
+template <class T, auto op> struct SparseTable {
 private:
   int n;
   std::vector<int> log_table;
   std::vector<std::vector<T>> table;
-  F op;
 
 public:
-  SparseTable(const std::vector<T> &v, F op) : n((int)v.size()), op(op) {
+  SparseTable(const std::vector<T> &v) : n((int)v.size()) {
     log_table.assign(n + 1, 0);
 
     for (int i = 2; i <= n; ++i) {
@@ -32,7 +31,7 @@ public:
 
     for (int k = 1; k < K; ++k) {
       for (int i = 0; i + (1 << k) <= n; ++i) {
-        table[k][i] = op(table[k - 1][i], table[k - 1][i + (1 << k - 1)]);
+        table[k][i] = op(table[k - 1][i], table[k - 1][i + (1 << (k - 1))]);
       }
     }
   }
@@ -44,5 +43,3 @@ public:
     return op(table[k][l], table[k][r - (1 << k)]);
   }
 };
-
-int main() {}
