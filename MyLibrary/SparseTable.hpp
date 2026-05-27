@@ -37,6 +37,7 @@ public:
   }
 
   T query(int l, int r) const {
+    assert(0 <= l && l < r && r <= n);
     int len = r - l;
     int k = log_table[len];
 
