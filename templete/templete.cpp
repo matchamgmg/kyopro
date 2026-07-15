@@ -10,8 +10,8 @@ using mint = modint998244353;
 template <class T> using pq = priority_queue<T, vector<T>>;               // 大きい順
 template <class T> using pq_g = priority_queue<T, vector<T>, greater<T>>; // 小さい順
 
-#define rep(i, s, n) for (int i = s; i < (int)n; i++)
-#define rrep(i, s, n) for (int i = (int)n - 1; i >= s; i--)
+#define rep(i, s, n) for (int i = (s); i < (int)(n); i++)
+#define rrep(i, s, n) for (int i = (n - 1); i >= (int)(s); i--)
 #define all(a) a.begin(), a.end()
 #define rall(a) a.rbegin(), a.rend()
 void pyes() { cout << "Yes" << endl; }
