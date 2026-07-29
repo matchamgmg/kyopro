@@ -47,7 +47,30 @@ template <class T> bool chmin(T &a, T b) {
   }
 }
 
+const int INF = 1e9;
+int op(int a, int b) { return max(a, b); }
+int e() { return -INF; }
+
 int main() {
   ios::sync_with_stdio(false);
   cin.tie(nullptr);
+
+  int N;
+  cin >> N;
+  vector<int> P(N);
+  rep(i, 0, N) { cin >> P[i]; }
+  segtree<int, op, e> seg(N + 1);
+
+  int maxP = 0;
+  int cnt = 0;
+  seg.set(0, 0);
+  rep(i, 0, N) {
+    if (P[i] < maxP) {
+      seg.set(P[i], max(seg.get(P[i]), seg.prod(0, P[i]) + 1));
+    } else {
+      cnt++;
+    }
+    chmax(maxP, P[i]);
+  }
+  cout << seg.all_prod() + cnt << endl;
 }

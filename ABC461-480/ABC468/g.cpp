@@ -55,45 +55,29 @@ int main() {
   cin >> N;
   string S;
   cin >> S;
+  if (S[0] == 'x' || S[N - 1] == 'x') {
+    cout << 0 << endl;
+    return 0;
+  }
+
   vector<mint> kaijou(N + 1, 1);
-  rep(i, 0, N) { kaijou[i + 1] = kaijou[i] * mint(i + 1); }
-  vector<pair<char, int>> RL;
-  char last = '.';
-  int len = 0;
-  rep(i, 0, N) {
-    if (S[i] == last) {
-      len++;
-    } else {
-      if (len > 0) {
-        RL.emplace_back(last, len);
-      }
-      last = S[i];
-      len = 1;
+  rep(i, 0, N) { kaijou[i + 1] = kaijou[i] * (i + 1); }
+  vector<mint> A(N + 1, 0);
+  A[1] = 1;
+  A[2] = 2;
+  rep(i, 3, N + 1) {
+    mint SA_kaijou = 0;
+    rep(j, 2, i) { SA_kaijou += A[j] * kaijou[i - j + 1]; }
+    A[i] = kaijou[i] - SA_kaijou;
+  }
+
+  mint ans = 1;
+  int last = 0;
+  rep(i, 1, N) {
+    if (S[i] == 'o') {
+      ans *= A[i - last + 1];
+      last = i;
     }
-  }
-  if (len > 0) {
-    RL.emplace_back(last, len);
-  }
-  int M = RL.size();
-  vector<mint> dp(M + 1, 1);
-  last = 'o';
-  len = 0;
-  rep(i, 0, M) {
-    if (RL[i].first == 'o') {
-      if (last == 'o') {
-        dp[i + 1] = dp[i];
-      } else if (last == 'x') {
-        mint a = kaijou[RL[i - 1].second + 1];
-        rep(j, 1, RL[i - 1].second + 1) { a -= kaijou[j]; }
-        dp[i + 1] = dp[i] * a;
-      }
-    } else {
-      dp[i + 1] = dp[i];
-    }
-  }
-  mint ans = dp[M];
-  if (RL[M - 1].first == 'x') {
-    ans = 0;
   }
   cout << ans.val() << endl;
 }
