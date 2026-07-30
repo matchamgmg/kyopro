@@ -19,7 +19,15 @@ inline constexpr Real PI = std::numbers::pi_v<Real>;
  *  -1: value < 0
  */
 
-constexpr int sign(Real value) noexcept { return (value > EPS ? 1 : value < -EPS ? -1 : 0); }
+constexpr int sign(Real value) noexcept {
+  if (value > EPS) {
+    return 1;
+  } else if (value < -EPS) {
+    return -1;
+  } else {
+    return 0;
+  }
+}
 
 /**
  * @brief 値が0に十分近いか判定する
