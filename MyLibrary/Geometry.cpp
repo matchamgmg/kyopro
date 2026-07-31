@@ -37,27 +37,37 @@ constexpr bool is_zero(Real value) noexcept { return sign(value) == 0; }
 /**
  * @brief 2つの値が十分近いか判定する
  */
-constexpr bool almost_equal(Real lhs, Real rhs) noexcept { return is_zero(lhs - rhs); }
+constexpr bool almost_equal(Real lhs, Real rhs) noexcept {
+  return is_zero(lhs - rhs);
+}
 
 /**
  * @brief lhs < rhs をEPSを考慮して判定する
  */
-constexpr bool less_than(Real lhs, Real rhs) noexcept { return lhs < rhs - EPS; }
+constexpr bool less_than(Real lhs, Real rhs) noexcept {
+  return lhs < rhs - EPS;
+}
 
 /**
  * @brief lhs <= rhs をEPSを考慮して判定する
  */
-constexpr bool less_equal(Real lhs, Real rhs) noexcept { return lhs <= rhs + EPS; }
+constexpr bool less_equal(Real lhs, Real rhs) noexcept {
+  return lhs <= rhs + EPS;
+}
 
 /**
  * @brief lhs > rhs をEPSを考慮して判定する
  */
-constexpr bool greater_than(Real lhs, Real rhs) noexcept { return lhs > rhs + EPS; }
+constexpr bool greater_than(Real lhs, Real rhs) noexcept {
+  return lhs > rhs + EPS;
+}
 
 /**
  * @brief lhs >= rhs をEPSを考慮して判定する
  */
-constexpr bool greater_equal(Real lhs, Real rhs) noexcept { return lhs >= rhs - EPS; }
+constexpr bool greater_equal(Real lhs, Real rhs) noexcept {
+  return lhs >= rhs - EPS;
+}
 
 //==============================================================================
 // Point2D
@@ -155,7 +165,8 @@ constexpr bool almost_equal(const Point2D &lhs, const Point2D &rhs) noexcept {
  *  sort(A.begin(), A.end(), LexicographicalLess{});
  */
 struct LexicographicalLess {
-  constexpr bool operator()(const Point2D &lhs, const Point2D &rhs) const noexcept {
+  constexpr bool operator()(const Point2D &lhs,
+                            const Point2D &rhs) const noexcept {
     return (lhs.x == rhs.x ? lhs.y < rhs.y : lhs.x < rhs.x);
   }
 };
@@ -164,7 +175,9 @@ struct LexicographicalLess {
 // Stream operators
 //==============================================================================
 
-inline std::istream &operator>>(std::istream &is, Point2D &point) { return is >> point.x >> point.y; }
+inline std::istream &operator>>(std::istream &is, Point2D &point) {
+  return is >> point.x >> point.y;
+}
 
 inline std::ostream &operator<<(std::ostream &os, const Point2D &point) {
   return os << '(' << point.x << ", " << point.y << ')';
@@ -177,7 +190,9 @@ inline std::ostream &operator<<(std::ostream &os, const Point2D &point) {
 /**
  * @brief 2つのベクトルの内積を求める
  */
-constexpr Real dot(const Point2D &lhs, const Point2D &rhs) noexcept { return lhs.x * rhs.x + lhs.y * rhs.y; }
+constexpr Real dot(const Point2D &lhs, const Point2D &rhs) noexcept {
+  return lhs.x * rhs.x + lhs.y * rhs.y;
+}
 
 /**
  * @brief 2つのベクトルの外積を求める
@@ -185,46 +200,63 @@ constexpr Real dot(const Point2D &lhs, const Point2D &rhs) noexcept { return lhs
  * 2次元ベクトルを3次元ベクトルとみなしたときの、
  * 外積のz成分を返す。
  */
-constexpr Real cross(const Point2D &lhs, const Point2D &rhs) noexcept { return lhs.x * rhs.y - lhs.y * rhs.x; }
+constexpr Real cross(const Point2D &lhs, const Point2D &rhs) noexcept {
+  return lhs.x * rhs.y - lhs.y * rhs.x;
+}
 
 /**
  * @brief 3点A, B, Cに対してABとACの外積を求める
  */
-constexpr Real cross(const Point2D &a, const Point2D &b, const Point2D &c) noexcept { return cross(b - a, c - a); }
+constexpr Real cross(const Point2D &a, const Point2D &b,
+                     const Point2D &c) noexcept {
+  return cross(b - a, c - a);
+}
 
 /**
  * @brief ベクトルの長さの二乗を求める
  */
-constexpr Real norm2(const Point2D &vector) noexcept { return dot(vector, vector); }
+constexpr Real norm2(const Point2D &vector) noexcept {
+  return dot(vector, vector);
+}
 
 /**
  * @brief ベクトルの長さを求める
  *
  * std::hypot(x, y) ... sqrt(x*x + y*y) より安全らしい
  */
-inline Real norm(const Point2D &vector) noexcept { return std::hypot(vector.x, vector.y); }
+inline Real norm(const Point2D &vector) noexcept {
+  return std::hypot(vector.x, vector.y);
+}
 
 /**
  * @brief 2点間の距離の二乗を求める
  */
-constexpr Real distance2(const Point2D &lhs, const Point2D &rhs) noexcept { return norm2(lhs - rhs); }
+constexpr Real distance2(const Point2D &lhs, const Point2D &rhs) noexcept {
+  return norm2(lhs - rhs);
+}
 
 /**
  * @brief 2点間の距離を求める
  */
-inline Real distance(const Point2D &lhs, const Point2D &rhs) noexcept { return norm(lhs - rhs); }
+inline Real distance(const Point2D &lhs, const Point2D &rhs) noexcept {
+  return norm(lhs - rhs);
+}
 
 /**
  * @brief ベクトルがゼロベクトルか判定する
  */
-constexpr bool is_zero(const Point2D &vector) noexcept { return is_zero(norm2(vector)); }
+constexpr bool is_zero(const Point2D &vector) noexcept {
+  return is_zero(norm2(vector));
+}
 
 /**
  * @brief ベクトルの偏角を求める
  *
  * 戻り値の範囲は[-PI, PI]。
  */
-inline Real argument(const Point2D &vector) noexcept { return std::atan2(vector.y, vector.x); }
+inline Real argument(const Point2D &vector) noexcept {
+  return std::atan2(vector.y, vector.x);
+}
 
 /**
  * @brief ベクトルを単位ベクトルに変換する
@@ -244,12 +276,16 @@ inline Point2D normalized(const Point2D &vector) {
 /**
  * @brief ベクトルを反時計回りに90度回転する
  */
-constexpr Point2D rotate90(const Point2D &vector) noexcept { return {-vector.y, vector.x}; }
+constexpr Point2D rotate90(const Point2D &vector) noexcept {
+  return {-vector.y, vector.x};
+}
 
 /**
  * @brief ベクトルを時計回りに90度回転する
  */
-constexpr Point2D rotate_minus90(const Point2D &vector) noexcept { return {vector.y, -vector.x}; }
+constexpr Point2D rotate_minus90(const Point2D &vector) noexcept {
+  return {vector.y, -vector.x};
+}
 
 /**
  * @brief ベクトルを反時計回りにthetaラジアン回転する
@@ -267,7 +303,8 @@ inline Point2D rotate(const Point2D &vector, Real theta) noexcept {
 /**
  * @brief 点をcenterを中心として反時計回りに回転する
  */
-inline Point2D rotate(const Point2D &point, const Point2D &center, Real theta) noexcept {
+inline Point2D rotate(const Point2D &point, const Point2D &center,
+                      Real theta) noexcept {
   return center + rotate(point - center, theta);
 }
 
@@ -328,7 +365,9 @@ inline Point2D projection(const Point2D &vector, const Point2D &base) {
 /**
  * @brief ベクトルvectorのbaseに垂直な成分を求める
  */
-inline Point2D rejection(const Point2D &vector, const Point2D &base) { return vector - projection(vector, base); }
+inline Point2D rejection(const Point2D &vector, const Point2D &base) {
+  return vector - projection(vector, base);
+}
 
 //==============================================================================
 // Relationship between vectors
@@ -337,12 +376,16 @@ inline Point2D rejection(const Point2D &vector, const Point2D &base) { return ve
 /**
  * @brief 2つのベクトルが平行か判定する
  */
-constexpr bool is_parallel(const Point2D &lhs, const Point2D &rhs) noexcept { return is_zero(cross(lhs, rhs)); }
+constexpr bool is_parallel(const Point2D &lhs, const Point2D &rhs) noexcept {
+  return is_zero(cross(lhs, rhs));
+}
 
 /**
  * @brief 2つのベクトルが直交しているか判定する
  */
-constexpr bool is_orthogonal(const Point2D &lhs, const Point2D &rhs) noexcept { return is_zero(dot(lhs, rhs)); }
+constexpr bool is_orthogonal(const Point2D &lhs, const Point2D &rhs) noexcept {
+  return is_zero(dot(lhs, rhs));
+}
 
 //==============================================================================
 // CCW (Counter Clockwise)
@@ -359,7 +402,8 @@ enum class CCW {
 /**
  * @brief 有向直線ABに対する点Cの位置関係を判定する
  */
-constexpr CCW ccw(const Point2D &a, const Point2D &b, const Point2D &c) noexcept {
+constexpr CCW ccw(const Point2D &a, const Point2D &b,
+                  const Point2D &c) noexcept {
   const Point2D ab = b - a;
   const Point2D ac = c - a;
 
@@ -387,7 +431,8 @@ constexpr CCW ccw(const Point2D &a, const Point2D &b, const Point2D &c) noexcept
 /**
  * @brief 点が線分AB上にあるか判定する
  */
-constexpr bool is_on_segment(const Point2D &point, const Point2D &a, const Point2D &b) noexcept {
+constexpr bool is_on_segment(const Point2D &point, const Point2D &a,
+                             const Point2D &b) noexcept {
   return ccw(a, b, point) == CCW::OnSegment;
 }
 
@@ -443,7 +488,9 @@ inline Point2D closest_point(const Point2D &point, const Segment &segment) {
 /**
  * @brief 点pointと直線lineとの距離を求める
  */
-inline Real distance(const Point2D &point, const Line &line) { return distance(point, projection(point, line)); }
+inline Real distance(const Point2D &point, const Line &line) {
+  return distance(point, projection(point, line));
+}
 
 /**
  * @brief 点pointと線分segmentとの距離を求める
