@@ -391,6 +391,67 @@ constexpr bool is_on_segment(const Point2D &point, const Point2D &a, const Point
   return ccw(a, b, point) == CCW::OnSegment;
 }
 
+//===================================================
+// Line, Segment
+//===================================================
+
+/**
+ * @brief 直線
+ */
+struct Line {
+  Point2D a;
+  Point2D b;
+};
+
+/**
+ * @brief 線分
+ */
+struct Segment {
+  Point2D a;
+  Point2D b;
+};
+
+/**
+ * @brief 点pointを直線lineへ正射影した点を求める
+ *
+ * line.aとline.bが同一店の場合は呼び出してはならない。
+ */
+inline Point2D projection(const Point2D &point, const Line &line) {
+  const Point2D direction = line.b - line.a;
+  assert(!is_zero(direction));
+
+  return line.a + projection(point - line.a, direction);
+}
+
+/**
+ * @brief 点pointに最も近い線分segment上の点を求める
+ */
+inline Point2D closest_point(const Point2D &point, const Segment &segment) {
+  const Point2D direction = segment.b - segment.a;
+  const Real direction_norm2 = norm2(direction);
+
+  if (is_zero(direction_norm2)) {
+    return segment.a;
+  }
+
+  Real t = dot(point - segment.a, direction) / direction_norm2;
+  t = std::clamp(t, Real(0), Real(1));
+
+  return segment.a + direction * t;
+}
+
+/**
+ * @brief 点pointと直線lineとの距離を求める
+ */
+inline Real distance(const Point2D &point, const Line &line) { return distance(point, projection(point, line)); }
+
+/**
+ * @brief 点pointと線分segmentとの距離を求める
+ */
+inline Real distance(const Point2D &point, const Segment &segment) {
+  return distance(point, closest_point(point, segment));
+}
+
 }; // namespace Vec2D
 
 using namespace Vec2D;
