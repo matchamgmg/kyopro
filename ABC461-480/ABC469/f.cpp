@@ -85,53 +85,28 @@ int main() {
 
   int N;
   cin >> N;
+  int max_A = 0;
   vector<int> A(N);
-  rep(i, 0, N) { cin >> A[i]; }
-
-  int M = 1e6;
-  vector<ll> lpf(M + 1);
-  vector<ll> primes;
-  iota(all(lpf), 0);
-  for (ll x = 2; x <= M; ++x) {
-    if (lpf[x] == x)
-      primes.emplace_back(x);
-    for (ll p : primes) {
-      if (p * x > M || p > lpf[x])
-        break;
-      lpf[p * x] = p;
-    }
+  rep(i, 0, N) {
+    cin >> A[i];
+    chmax(max_A, A[i]);
   }
+  vector<int> PA(max_A + 1, -1);
+  rep(i, 0, N) { PA[A[i]] = i; }
 
   UnionFind uf(N);
-  vector<vector<int>> B(M + 1);
-  rrep(i, 0, N) {
-    ll n = A[i];
-    B[n].emplace_back(i);
-    if (B[n].size() >= 2) {
-      continue;
-    }
-    while (n > 1) {
-      n /= lpf[n];
-      B[n].emplace_back(i);
-      if (B[n].size() >= 2) {
-        break;
+  ll ans = 0;
+  rrep(g, 1, max_A + 1) {
+    vector<int> B;
+    for (int ga = g; ga <= max_A; ga += g) {
+      if (PA[ga] >= 0) {
+        B.emplace_back(PA[ga]);
       }
     }
-  }
-
-  ll ans = 0;
-  rrep(i, 0, M + 1) {
-    int siz = B[i].size();
-    if (siz <= 1) {
-      continue;
-    }
-    rep(j, 0, siz - 1) {
-      rep(k, j + 1, siz) {
-        if (uf.same(B[i][j], B[i][k])) {
-          continue;
-        }
-        uf.merge(B[i][j], B[i][k]);
-        ans += i;
+    rep(i, 0, B.size() - 1) {
+      if (!uf.same(B[0], B[i + 1])) {
+        uf.merge(B[0], B[i + 1]);
+        ans += g;
       }
     }
   }

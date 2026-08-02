@@ -68,10 +68,49 @@ int main() {
     return {idx / M, idx % M, d};
   };
   vector<mint> dp(U * M * (1 << D), 0);
-  dp[state2idx(1, 0, 0)] = 1;
+  dp[state2idx(0, 0, 0)] = 1;
   for (char c : N) {
     c -= '0';
     vector<mint> old(U * M * (1 << D), 0);
     swap(dp, old);
+    rep(i, 0, U * M * (1 << D)) {
+      if (old[i] == 0) {
+        continue;
+      }
+      auto [u, m, d] = idx2state(i);
+      rep(j, 0, 10) {
+        int nu = u;
+        int nm = (m + j) % 3;
+        int nd = d | 1 << j;
+        if (u == 0 && j > c) {
+          continue;
+        }
+        if (u == 0 && j < c) {
+          nu = 1;
+        }
+        if (d == 0 && j == 0) {
+          nd = d;
+        }
+        dp[state2idx(nu, nm, nd)] += old[i];
+      }
+    }
   }
+  mint ans = 0;
+  rep(i, 0, U * M * (1 << D)) {
+    auto [u, m, d] = idx2state(i);
+    int cnt = 0;
+    if (m == 0) {
+      cnt++;
+    }
+    if (d >> 3 & 1) {
+      cnt++;
+    }
+    if (popcount((unsigned int)d) == 3) {
+      cnt++;
+    }
+    if (cnt == 1) {
+      ans += dp[i];
+    }
+  }
+  cout << ans.val() - 1 << endl;
 }

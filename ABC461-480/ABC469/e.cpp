@@ -58,17 +58,34 @@ int main() {
   cin >> N >> K;
   string S;
   cin >> S;
-  const ll INF = 1e9;
-  vector<long double> dp(N + 1, -INF);
-  int i = 0;
-  int cnt = 0;
-  while (i < N && cnt < K) {
-    if (S[i] == 'o') {
-      cnt++;
+
+  vector<int> A(N + 1, 0);
+  rep(i, 0, N) { A[i + 1] = A[i] + (S[i] == 'o'); }
+
+  auto f = [&](long double p) -> bool {
+    bool res = false;
+    int l = 0;
+    long double el = N;
+    rep(r, 1, N + 1) {
+      if (A[r] - A[l] < K) {
+        continue;
+      }
+      long double er = A[r] - r * p;
+      while (A[r] - A[l] >= K) {
+        chmin(el, A[l] - l * p);
+        if (el <= er) {
+          res = true;
+        }
+        l++;
+      }
     }
-    ++i;
+    return res;
+  };
+
+  long double ok = 0, ng = 1;
+  while (ng - ok > 1e-9) {
+    long double mid = (ok + ng) / 2;
+    (f(mid) ? ok : ng) = mid;
   }
-  int l = i;
-  dp[l] = (long double)K / l;
-  rep(i, l, N) {}
+  cout << fixed << setprecision(10) << ok << endl;
 }
