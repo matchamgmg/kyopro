@@ -135,26 +135,47 @@ class PersistentSegmentTree {
               prod_impl(all_nodes[index].right_child, l, r, m, right));
   }
 
+  /**
+   * @brief 区間コピー
+   * バージョンv1の木における半開区間[l,
+   * r)をバージョンv2の木に移植して新しい木を作る
+   * @return 新しく構築した部分木の根ノードのインデックス
+   */
+  int copy_impl(int index1, int index2, int l, int r, int left, int right) {
+    if (r <= left || right <= l) {
+      return index2;
+    }
+    if (l <= left && right <= r) {
+      return index1;
+    }
+    int m = (left + right) >> 1;
+    return make_new_node(copy_impl(all_nodes[index1].left_child,
+                                   all_nodes[index2].left_child, l, r, left, m),
+                         copy_impl(all_nodes[index1].right_child,
+                                   all_nodes[index2].right_child, l, r, m,
+                                   right));
+  }
+
 public:
-  PersistentSegmentTree(int n_) : n(n_) {
+  explicit PersistentSegmentTree(int n_) : n(n_) {
     assert(n > 0);
     size = 1;
     while (size < n) {
       size <<= 1;
     }
-    all_nodes.assign(size * 2, Node());
+    all_nodes.assign(size * 2, Node{});
     set_children();
     version_root.emplace_back(1);
   }
 
-  PersistentSegmentTree(const std::vector<T> &vec) {
-    int n = vec.size();
+  explicit PersistentSegmentTree(const std::vector<T> &vec)
+      : n(static_cast<int>(vec.size())) {
     assert(n > 0);
     size = 1;
     while (size < n) {
       size <<= 1;
     }
-    all_nodes.assign(size * 2, Node());
+    all_nodes.assign(size * 2, Node{});
     for (int i = 0; i < n; ++i) {
       all_nodes[i + size] = Node(vec[i]);
     }
@@ -186,13 +207,29 @@ public:
   }
 
   /**
-   * @brief 区間クエリ
+   * @brief 区間積取得
    * バージョンverの木における，半開区間[l, r)に対する積を取得
    */
   T prod(int ver, int l, int r) const {
     assert(0 <= ver && ver < static_cast<int>(version_root.size()));
     assert(0 <= l && l <= r && r <= n);
     return prod_impl(version_root[ver], l, r, 0, size);
+  }
+
+  /**
+   * @brief 区間コピー
+   * バージョンv1の木における半開区間[l,
+   * r)をバージョンv2の木に移植して新しい木を作る
+   * @return 新しいバージョン
+   */
+  int copy(int ver1, int ver2, int l, int r) {
+    assert(0 <= ver1 && ver1 < static_cast<int>(version_root.size()));
+    assert(0 <= ver2 && ver2 < static_cast<int>(version_root.size()));
+    assert(0 <= l && l <= r && r <= n);
+    int new_root_index =
+        copy_impl(version_root[ver1], version_root[ver2], l, r, 0, size);
+    version_root.emplace_back(new_root_index);
+    return static_cast<int>(version_root.size()) - 1;
   }
 };
 
@@ -209,4 +246,6 @@ int main() {
   cout << seg.get(1, 0) << endl;
   cout << seg.prod(0, 0, 8) << endl;
   cout << seg.prod(1, 0, 8) << endl;
+  cout << seg.copy(1, 0, 0, 2) << endl;
+  cout << seg.prod(2, 0, 8) << endl;
 }
