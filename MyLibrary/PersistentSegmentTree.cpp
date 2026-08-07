@@ -1,5 +1,13 @@
 #include <bits/stdc++.h>
 
+/**
+ * @tparam T データ型
+ * @tparam op 二項演算 T x T -> T
+ * @tparam e op の単位元を返す関数
+ *
+ * @pre op(op(a,b),c) == op(a,op(b,c))
+ * @pre op(a,e()) == op(e(),a) == a
+ */
 template <class T, auto op, auto e>
 concept seg_concept = requires(T a, T b) {
   { op(a, b) } -> std::same_as<T>;
@@ -9,11 +17,14 @@ concept seg_concept = requires(T a, T b) {
 /**
  * @brief 永続セグメント木
  * 過去のすべてのバージョンに対してアクセス・更新が可能 (fully persistent)
- * ポインタを利用したセグメント木をベースとする
+ * ポインタを利用したセグメント木をベースとする(インデックスで代用)
  *
- * @tparam データ型 T
- * @tparam 演算 op : T \times T -> T
- * @tparam 単位元 e : x \in T, e \in T, op(x,e) = x
+ * @tparam T データ型
+ * @tparam op 二項演算 T x T -> T
+ * @tparam e op の単位元を返す関数
+ *
+ * @pre op(op(a,b),c) == op(a,op(b,c))
+ * @pre op(a,e()) == op(e(),a) == a
  */
 template <class T, auto op, auto e>
   requires seg_concept<T, op, e>
@@ -22,9 +33,12 @@ class PersistentSegmentTree {
     T val;
     int left_child, right_child;
     Node() : val(e()), left_child(-1), right_child(-1) {}
-    Node(const T &val) : val(val), left_child(-1), right_child(-1) {}
+    explicit Node(const T &val) : val(val), left_child(-1), right_child(-1) {}
+    Node(const T &val, int left, int right)
+        : val(val), left_child(left), right_child(right) {}
   };
 
+  int n;                         ///< 元の配列の要素数
   int size;                      ///< 葉ノードの数
   std::vector<Node> all_nodes;   ///< すべてのノードを保持
   std::vector<int> version_root; ///< 各バージョンの根のインデックス
@@ -51,7 +65,7 @@ class PersistentSegmentTree {
   /**
    * @brief バージョンverの木におけるpos番目の葉ノードの値を取得
    */
-  T get_impl(int pos, int index, int l, int r) {
+  T get_impl(int pos, int index, int l, int r) const {
     if (l + 1 == r) {
       return all_nodes[index].val;
     }
@@ -68,7 +82,7 @@ class PersistentSegmentTree {
    * バージョンverの木におけるpos番目の葉ノードの値をxに更新して新たなバージョンの木を作る
    * @return 新しいノードのインデックス
    */
-  int set_impl(int pos, T x, int index, int l, int r) {
+  int set_impl(int pos, const T &x, int index, int l, int r) {
     if (l + 1 == r) {
       return make_new_node(x);
     }
@@ -86,33 +100,46 @@ class PersistentSegmentTree {
 
   /**
    * @brief 新しいノードを作成
+   * 葉ノード以外
    * @return 新しいノードのインデックス
    */
   int make_new_node(int l, int r) {
-    Node node{};
-    node.left_child = l;
-    node.right_child = r;
-    if (l != -1) {
-      node.val = op(all_nodes[l].val, all_nodes[r].val);
-    }
-    all_nodes.emplace_back(node);
-    return all_nodes.size() - 1;
+    T val = op(all_nodes[l].val, all_nodes[r].val);
+    all_nodes.emplace_back(val, l, r);
+    return static_cast<int>(all_nodes.size()) - 1;
   }
 
   /**
    * @brief 新しいノードを作成
+   * 葉ノード
    * @return 新しいノードのインデックス
    */
-  int make_new_node(T x) {
-    all_nodes.emplace_back(Node(x));
-    return all_nodes.size() - 1;
+  int make_new_node(const T &x) {
+    all_nodes.emplace_back(x);
+    return static_cast<int>(all_nodes.size()) - 1;
+  }
+
+  /**
+   * @brief 区間クエリ
+   * バージョンverの木における，半開区間[l, r)に対する積を取得
+   */
+  T prod_impl(int index, int l, int r, int left, int right) const {
+    if (r <= left || right <= l) {
+      return e();
+    }
+    if (l <= left && right <= r) {
+      return all_nodes[index].val;
+    }
+    int m = (left + right) >> 1;
+    return op(prod_impl(all_nodes[index].left_child, l, r, left, m),
+              prod_impl(all_nodes[index].right_child, l, r, m, right));
   }
 
 public:
-  PersistentSegmentTree(int n_) {
-    assert(n_ > 0);
+  PersistentSegmentTree(int n_) : n(n_) {
+    assert(n > 0);
     size = 1;
-    while (size < n_) {
+    while (size < n) {
       size <<= 1;
     }
     all_nodes.assign(size * 2, Node());
@@ -121,14 +148,14 @@ public:
   }
 
   PersistentSegmentTree(const std::vector<T> &vec) {
-    int n_ = vec.size();
-    assert(n_ > 0);
+    int n = vec.size();
+    assert(n > 0);
     size = 1;
-    while (size < n_) {
+    while (size < n) {
       size <<= 1;
     }
     all_nodes.assign(size * 2, Node());
-    for (int i = 0; i < n_; ++i) {
+    for (int i = 0; i < n; ++i) {
       all_nodes[i + size] = Node(vec[i]);
     }
     set_children();
@@ -139,17 +166,33 @@ public:
   /**
    * @brief バージョンverの木におけるpos番目の葉ノードの値を取得
    */
-  T get(int ver, int pos) { return get_impl(pos, version_root[ver], 0, size); }
+  T get(int ver, int pos) const {
+    assert(0 <= ver && ver < static_cast<int>(version_root.size()));
+    assert(0 <= pos && pos < n);
+    return get_impl(pos, version_root[ver], 0, size);
+  }
 
   /**
    * @brief
    * バージョンverの木におけるpos番目の葉ノードの値をxに更新して新たなバージョンの木を作る
    * @return 新しいバージョン
    */
-  int set(int ver, int pos, T x) {
+  int set(int ver, int pos, const T &x) {
+    assert(0 <= ver && ver < static_cast<int>(version_root.size()));
+    assert(0 <= pos && pos < n);
     int new_root_index = set_impl(pos, x, version_root[ver], 0, size);
     version_root.emplace_back(new_root_index);
-    return version_root.size() - 1;
+    return static_cast<int>(version_root.size()) - 1;
+  }
+
+  /**
+   * @brief 区間クエリ
+   * バージョンverの木における，半開区間[l, r)に対する積を取得
+   */
+  T prod(int ver, int l, int r) const {
+    assert(0 <= ver && ver < static_cast<int>(version_root.size()));
+    assert(0 <= l && l <= r && r <= n);
+    return prod_impl(version_root[ver], l, r, 0, size);
   }
 };
 
@@ -163,4 +206,7 @@ int main() {
   PersistentSegmentTree<int, op, e> seg(N);
   cout << seg.get(0, 1) << endl;
   cout << seg.set(0, 0, 1) << endl;
+  cout << seg.get(1, 0) << endl;
+  cout << seg.prod(0, 0, 8) << endl;
+  cout << seg.prod(1, 0, 8) << endl;
 }
