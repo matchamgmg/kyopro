@@ -15,6 +15,14 @@ concept seg_concept = requires(T a, T b) {
 };
 
 /**
+ * @brief セグメント木上の二分探索の際に渡す比較関数についての制約
+ */
+template <class T, auto comp>
+concept seg_comp = requires(T a, T b) {
+  { comp(a, b) } -> std::convertible_to<bool>;
+};
+
+/**
  * @brief 永続セグメント木
  * 過去のすべてのバージョンに対してアクセス・更新が可能 (fully persistent)
  * ポインタを利用したセグメント木をベースとする(インデックスで代用)
@@ -34,8 +42,7 @@ class PersistentSegmentTree {
     int left_child, right_child;
     Node() : val(e()), left_child(-1), right_child(-1) {}
     explicit Node(const T &val) : val(val), left_child(-1), right_child(-1) {}
-    Node(const T &val, int left, int right)
-        : val(val), left_child(left), right_child(right) {}
+    Node(const T &val, int left, int right) : val(val), left_child(left), right_child(right) {}
   };
 
   int n;                         ///< 元の配列の要素数
@@ -88,12 +95,10 @@ class PersistentSegmentTree {
     }
     int m = (l + r) >> 1;
     if (pos < m) {
-      int new_left_child_index =
-          set_impl(pos, x, all_nodes[index].left_child, l, m);
+      int new_left_child_index = set_impl(pos, x, all_nodes[index].left_child, l, m);
       return make_new_node(new_left_child_index, all_nodes[index].right_child);
     } else {
-      int new_right_child_index =
-          set_impl(pos, x, all_nodes[index].right_child, m, r);
+      int new_right_child_index = set_impl(pos, x, all_nodes[index].right_child, m, r);
       return make_new_node(all_nodes[index].left_child, new_right_child_index);
     }
   }
@@ -149,11 +154,133 @@ class PersistentSegmentTree {
       return index1;
     }
     int m = (left + right) >> 1;
-    return make_new_node(copy_impl(all_nodes[index1].left_child,
-                                   all_nodes[index2].left_child, l, r, left, m),
-                         copy_impl(all_nodes[index1].right_child,
-                                   all_nodes[index2].right_child, l, r, m,
-                                   right));
+    return make_new_node(
+        copy_impl(all_nodes[index1].left_child, all_nodes[index2].left_child, l, r, left, m),
+        copy_impl(all_nodes[index1].right_child, all_nodes[index2].right_child, l, r, m, right));
+  }
+
+  /**
+   * @brief セグメント木上の二分探索
+   * @return -1 境界が見つからなかったとき
+   */
+  template <auto comp>
+  int l_fix_lower_bound_impl(int index, int l, int left, int right, T &product, const T &x) {
+    if (right <= l) {
+      return -1;
+    }
+
+    if (l <= left) {
+      T next = op(product, all_nodes[index].val);
+      if (comp(next, x)) {
+        product = next;
+        return -1;
+      }
+      if (left + 1 == right) {
+        return right;
+      }
+    }
+
+    int m = (left + right) >> 1;
+
+    int res = l_fix_lower_bound_impl<comp>(all_nodes[index].left_child, l, left, m, product, x);
+    if (res != -1) {
+      return res;
+    }
+
+    return l_fix_lower_bound_impl<comp>(all_nodes[index].right_child, l, m, right, product, x);
+  }
+
+  /**
+   * @brief セグメント木上の二分探索
+   * @return -1 境界が見つからなかったとき
+   */
+  template <auto comp>
+  int l_fix_upper_bound_impl(int index, int l, int left, int right, T &product, const T &x) {
+    if (right <= l) {
+      return -1;
+    }
+
+    if (l <= left) {
+      T next = op(product, all_nodes[index].val);
+      if (!comp(x, next)) {
+        product = next;
+        return -1;
+      }
+      if (left + 1 == right) {
+        return right;
+      }
+    }
+
+    int m = (left + right) >> 1;
+
+    int res = l_fix_upper_bound_impl<comp>(all_nodes[index].left_child, l, left, m, product, x);
+    if (res != -1) {
+      return res;
+    }
+
+    return l_fix_upper_bound_impl<comp>(all_nodes[index].right_child, l, m, right, product, x);
+  }
+
+  /**
+   * @brief セグメント木上の二分探索
+   * @return size 境界が見つからなかったとき
+   */
+  template <auto comp>
+  int r_fix_lower_bound_impl(int index, int r, int left, int right, T &product, const T &x) {
+    if (r <= left) {
+      return size;
+    }
+
+    if (right <= r) {
+      T next = op(all_nodes[index].val, product);
+      if (comp(x, next)) {
+        product = next;
+        return size;
+      }
+      if (left + 1 == right) {
+        return left;
+      }
+    }
+
+    int m = (left + right) >> 1;
+
+    int res = r_fix_lower_bound_impl<comp>(all_nodes[index].right_child, r, m, right, product, x);
+    if (res != size) {
+      return res;
+    }
+
+    return r_fix_lower_bound_impl<comp>(all_nodes[index].left_child, r, left, m, product, x);
+  }
+
+  /**
+   * @brief セグメント木上の二分探索
+   * @return size 境界が見つからなかったとき
+   */
+  template <auto comp>
+  int r_fix_upper_bound_impl(int index, int r, int left, int right, T &product, const T &x) {
+    if (r <= left) {
+      return size;
+    }
+
+    if (right <= r) {
+      T next = op(all_nodes[index].val, product);
+      if (!comp(next, x)) {
+        product = next;
+        return size;
+      }
+      if (left + 1 == right) {
+        return left;
+      }
+    }
+
+    int m = (left + right) >> 1;
+
+    int res = r_fix_upper_bound_impl<comp>(all_nodes[index].right_child, r, m, right, product, x);
+    if (res != size) {
+      return res;
+    }
+
+    return r_fix_upper_bound_impl<comp>(all_nodes[index].left_child, r, left, m, product, x);
   }
 
 public:
@@ -168,8 +295,7 @@ public:
     version_root.emplace_back(1);
   }
 
-  explicit PersistentSegmentTree(const std::vector<T> &vec)
-      : n(static_cast<int>(vec.size())) {
+  explicit PersistentSegmentTree(const std::vector<T> &vec) : n(static_cast<int>(vec.size())) {
     assert(n > 0);
     size = 1;
     while (size < n) {
@@ -226,10 +352,73 @@ public:
     assert(0 <= ver1 && ver1 < static_cast<int>(version_root.size()));
     assert(0 <= ver2 && ver2 < static_cast<int>(version_root.size()));
     assert(0 <= l && l <= r && r <= n);
-    int new_root_index =
-        copy_impl(version_root[ver1], version_root[ver2], l, r, 0, size);
+    int new_root_index = copy_impl(version_root[ver1], version_root[ver2], l, r, 0, size);
     version_root.emplace_back(new_root_index);
     return static_cast<int>(version_root.size()) - 1;
+  }
+
+  /**
+   * @brief
+   * バージョンverの木について左端lを固定したときの，comp(op(l,l+1,...r-1), x)
+   * == true && comp(op(l,l+1,...r), x) == false を満たすrを求める
+   * @pre rについて単調増加ならcomp : op(l,...,r) < x
+   */
+  template <auto comp>
+    requires seg_comp<T, comp>
+  int l_fix_lower_bound(int ver, int l, const T &x) {
+    assert(0 <= ver && ver < static_cast<int>(version_root.size()));
+    assert(0 <= l && l <= n);
+    T product = e();
+    int res = l_fix_lower_bound_impl<comp>(version_root[ver], l, 0, size, product, x);
+    return res == -1 ? n : std::min(res, n);
+  }
+
+  /**
+   * @brief
+   * バージョンverの木について左端lを固定したときの，comp(x, op(l,l+1,...r-1))
+   * == false && comp(x, op(l,l+1,...r)) == true を満たすrを求める
+   * @pre rについて単調増加ならcomp : x < op(l,...,r)
+   */
+  template <auto comp>
+    requires seg_comp<T, comp>
+  int l_fix_upper_bound(int ver, int l, const T &x) {
+    assert(0 <= ver && ver < static_cast<int>(version_root.size()));
+    assert(0 <= l && l <= n);
+    T product = e();
+    int res = l_fix_upper_bound_impl<comp>(version_root[ver], l, 0, size, product, x);
+    return res == -1 ? n : std::min(res, n);
+  }
+
+  /**
+   * @brief
+   * バージョンverの木について右端rを固定したときの，comp(x, op(l+1,...r-1))
+   * == true && comp(x, op(l,l+1,...r-1)) == false を満たすlを求める
+   * @pre lについて単調減少ならcomp : x > op(l,...,r-1)
+   */
+  template <auto comp>
+    requires seg_comp<T, comp>
+  int r_fix_lower_bound(int ver, int r, const T &x) {
+    assert(0 <= ver && ver < static_cast<int>(version_root.size()));
+    assert(0 <= r && r <= n);
+    T product = e();
+    int res = r_fix_lower_bound_impl<comp>(version_root[ver], r, 0, size, product, x);
+    return res == size ? -1 : res;
+  }
+
+  /**
+   * @brief
+   * バージョンverの木について右端rを固定したときの，comp(op(l+1,...r-1), x)
+   * == false && comp(op(l,...r-1), x) == true を満たすlを求める
+   * @pre lについて単調減少ならcomp : op(l,...,r-1) > x
+   */
+  template <auto comp>
+    requires seg_comp<T, comp>
+  int r_fix_upper_bound(int ver, int r, const T &x) {
+    assert(0 <= ver && ver < static_cast<int>(version_root.size()));
+    assert(0 <= r && r <= n);
+    T product = e();
+    int res = r_fix_upper_bound_impl<comp>(version_root[ver], r, 0, size, product, x);
+    return res == size ? -1 : res;
   }
 };
 
@@ -241,11 +430,35 @@ using namespace std;
 int main() {
   int N = 8;
   PersistentSegmentTree<int, op, e> seg(N);
+  // 一点取得
   cout << seg.get(0, 1) << endl;
+  // 一点更新
   cout << seg.set(0, 0, 1) << endl;
   cout << seg.get(1, 0) << endl;
+  // 区間積
   cout << seg.prod(0, 0, 8) << endl;
   cout << seg.prod(1, 0, 8) << endl;
+  // 区間コピー
   cout << seg.copy(1, 0, 0, 2) << endl;
   cout << seg.prod(2, 0, 8) << endl;
+
+  // 二分探索
+  vector<int> vec(8, 1);
+  PersistentSegmentTree<int, op, e> seg2(vec);
+  cout << seg2.l_fix_lower_bound<less<int>{}>(0, 0, 2) << endl;
+  cout << seg2.l_fix_upper_bound<less<int>{}>(0, 0, 2) << endl;
+  cout << seg2.r_fix_lower_bound<greater<int>{}>(0, 8, 6) << endl;
+  cout << seg2.r_fix_upper_bound<greater<int>{}>(0, 8, 6) << endl;
+
+  vector<int> vec2(6, 1);
+  PersistentSegmentTree<int, op, e> seg3(vec2);
+  cout << seg3.l_fix_lower_bound<less<int>{}>(0, 0, 2) << endl;
+  cout << seg3.l_fix_upper_bound<less<int>{}>(0, 0, 2) << endl;
+  cout << seg3.r_fix_lower_bound<greater<int>{}>(0, 6, 4) << endl;
+  cout << seg3.r_fix_upper_bound<greater<int>{}>(0, 6, 4) << endl;
+
+  cout << seg3.l_fix_lower_bound<less<int>{}>(0, 6, 2) << endl;
+  cout << seg3.l_fix_upper_bound<less<int>{}>(0, 4, 2) << endl;
+  cout << seg3.r_fix_lower_bound<greater<int>{}>(0, 0, 4) << endl;
+  cout << seg3.r_fix_upper_bound<greater<int>{}>(0, 2, 4) << endl;
 }
