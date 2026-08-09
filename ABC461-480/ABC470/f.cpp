@@ -47,7 +47,81 @@ template <class T> bool chmin(T &a, T b) {
   }
 }
 
+struct UnionFind {
+  UnionFind(int n_) : n(n_), group_num(n_) { par.assign(n_, -1); }
+  int root(int x) {
+    if (par[x] < 0)
+      return x;
+    return par[x] = root(par[x]);
+  }
+  int size(int x) { return -par[root(x)]; }
+  bool same(int x, int y) { return root(x) == root(y); }
+  bool merge(int x, int y) {
+    x = root(x);
+    y = root(y);
+    if (x == y)
+      return false;
+    if (size(x) > size(y))
+      swap(x, y);
+    par[y] += par[x];
+    par[x] = y;
+    group_num--;
+    return true;
+  }
+  int groups() { return group_num; }
+
+private:
+  int n;
+  int group_num;
+  vector<int> par;
+};
+
 int main() {
   ios::sync_with_stdio(false);
   cin.tie(nullptr);
+
+  int N, M;
+  cin >> N >> M;
+  string S;
+  cin >> S;
+  UnionFind uf(N);
+  rep(i, 0, M) {
+    int a, b;
+    cin >> a >> b;
+    a--;
+    b--;
+    uf.merge(a, b);
+  }
+
+  vector<mint> kaijou(N + 1, 1);
+  vector<mint> kaijou_inv(N + 1, 1);
+  rep(i, 0, N) {
+    kaijou[i + 1] = kaijou[i] * (i + 1);
+    kaijou_inv[i + 1] = kaijou_inv[i] * mint(i + 1).inv();
+  }
+  mint ans = 1;
+  vector<vector<int>> U(N);
+  rep(i, 0, N) { U[uf.root(i)].emplace_back(i); }
+  int max_cnt = 0;
+  rep(i, 0, N) {
+    if (uf.root(i) == i) {
+      vector<int> cnt(26, 0);
+      for (int v : U[i]) {
+        ++cnt[S[v] - 'a'];
+      }
+      mint ans1 = kaijou[uf.size(i)];
+
+      rep(c, 0, 26) {
+        if (cnt[c] > 0) {
+          ans1 *= kaijou_inv[cnt[c]];
+          chmax(max_cnt, cnt[c]);
+        }
+      }
+      ans *= ans1;
+    }
+  }
+  if (max_cnt < 2) {
+    ans *= mint(2).inv();
+  }
+  cout << ans.val() << endl;
 }

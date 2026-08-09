@@ -47,6 +47,12 @@ template <class T> bool chmin(T &a, T b) {
   }
 }
 
+// 1枚目のカードを選ぶ前に，既知のカードでペアができるなら，そのペアを取ればよい
+// 2枚目のカードを選ぶ前に，1枚目のカードと既知のカードでペアができるなら，そのペアを取ればよい
+// 既知のカードでペアを作ることができないなら，未知のカードを選ぶとしてよい
+// f(L, C0, C1) := ライフがL, 未知のカードが2C0 + C1枚，そのうち相方が既知のカードがC1枚
+//                今後獲得できるペアの個数の期待値
+// 初期値 f(L, N, 0) -> 終了 f(0, C0, C1), f(l, 0, c1)
 int main() {
   ios::sync_with_stdio(false);
   cin.tie(nullptr);
@@ -55,70 +61,58 @@ int main() {
   cin >> N >> L;
   vector<int> A(N);
   rep(i, 0, N) { cin >> A[i]; }
-  vector<int> B(N, 0); // 場所が既知の枚数
-  vector<int> C(3, 0); // 既知の枚数 0, 1, 2
-  C[2] = N;
-  int unknown = 2 * N;
 
-  map<tuple<int, int, vector<int>>, double> memo;
-  auto f = [&](auto f, int now_score, int life) -> double {
+  map<tuple<int, int, int>, double> memo;
+
+  auto dp = [&](auto f, int life, int aikata_unknown, int aikata_known) -> double {
+    tuple<int, int, int> state(life, aikata_unknown, aikata_known);
+    if (memo.contains(state)) {
+      return memo[state];
+    }
     if (life == 0) {
-      return memo[{now_score, life, B}] = 0;
+      return memo[state] = 0;
     }
-    // その行動をした結果将来得られるスコアの期待値
-    double e = 0;
-    if (C[2] > 0) {
-      rep(i, 0, N) {
-        if (B[i] == 2) {
-          B[i] = -1;
-          C[2]--;
-          chmax(e, f(f, now_score + A[i], life));
-          B[i] = 2;
-          C[2]++;
-        }
+    if (life > 0 && aikata_unknown == 0) {
+      return memo[state] = aikata_known;
+    }
+    int remain = 2 * aikata_unknown + aikata_known;
+    // 1枚目は未知のカードを選ぶ
+    // 相方が既知のとき
+    double p = (double)aikata_known / remain;
+    // 相方が未知のとき
+    // 二枚目にその相方を選ぶ
+    double q = (1 - p) / (remain - 1);
+    // 二枚目に相方が未知のカードを選ぶ
+    double r = (1 - p) * 2 * (aikata_unknown - 1) / (remain - 1);
+    // 二枚目に相方が既知のカードを選ぶ．このときライフが1以上なら次のターンにそのペアを選ぶ
+    double s = (1 - p) * aikata_known / (remain - 1);
+
+    double ex = 0;
+    if (aikata_known > 0 && p > 0) {
+      ex += p * (1 + f(f, life, aikata_unknown, aikata_known - 1));
+    }
+    if (aikata_unknown > 1 && r > 0) {
+      ex += r * f(f, life - 1, aikata_unknown - 2, aikata_known + 2);
+    }
+    if (aikata_unknown > 0) {
+      if (q > 0) {
+        ex += q * (1 + f(f, life, aikata_unknown - 1, aikata_known));
       }
-    } else {
-      rep(i, 0, N) {
-        if (B[i] == 1) {
-          double ex = 0;
-          // 確率1/unknownでペア成立
-          double p = (double)1 / (double)unknown;
-          rep(j, 0, N) {
-            if (j == i) {
-              B[i] = -1;
-              C[1]--;
-              C[0]--;
-              unknown--;
-              ex += p * f(f, now_score + A[i], life);
-              B[i] = 1;
-              C[1]++;
-              C[0]++;
-              unknown++;
-            } else if (B[j] == 0) {
-              B[j]++;
-              C[0]--;
-              C[1]++;
-              unknown--;
-              ex += p * f(f, now_score, life - 1);
-              B[j]--;
-              C[0]++;
-              C[1]--;
-              unknown++;
-            } else if (B[j] == 1) {
-              B[j]++;
-              C[1]--;
-              C[2]++;
-              unknown--;
-              ex += p * f(f, now_score, life - 1);
-              B[j]--;
-              C[1]++;
-              C[2]--;
-              unknown++;
-            }
-          }
+      if (s > 0) {
+        if (life > 1) {
+          ex += s * (1 + f(f, life - 1, aikata_unknown - 1, aikata_known));
         } else {
+          ex += s * f(f, life - 1, aikata_unknown - 1, aikata_known);
         }
       }
     }
+    return memo[state] = ex;
   };
+
+  dp(dp, L, N, 0);
+
+  double ex = memo[{L, N, 0}];
+  int sum = 0;
+  rep(i, 0, N) { sum += A[i]; }
+  cout << fixed << setprecision(10) << (double)sum * ex / N << endl;
 }
