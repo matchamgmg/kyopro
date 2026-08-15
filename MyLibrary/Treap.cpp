@@ -1,6 +1,8 @@
 #include <bits/stdc++.h>
 
-template <class ValueType, class Compare = std::less<ValueType>, bool Multi = false> struct Treap {
+template <class ValueType, class Compare = std::less<ValueType>,
+          bool Multi = false>
+struct Treap {
 private:
   struct Node {
   private:
@@ -16,17 +18,20 @@ private:
 
   public:
     Node() = default;
-    explicit Node(const ValueType &val, const uint32_t pri) : value(val), priority(pri) {}
+    explicit Node(const ValueType &val, const uint32_t pri)
+        : value(val), priority(pri) {}
   };
 
   int n = 0;
-  std::mt19937 mt;
+  inline static std::mt19937 mt{std::random_device{}()};
   std::deque<Node> nodes;
   Compare comp{};
   Node *root = nullptr;
   Node sentinel;
 
-  int size(Node *t) const { return t ? t->siz : 0; }
+  int size(Node *t) const {
+    return t ? t->siz : 0;
+  }
 
   void update(Node *t) const {
     if (t) {
@@ -41,11 +46,17 @@ private:
     }
   }
 
-  uint32_t next_priority() { return mt(); }
+  uint32_t next_priority() {
+    return mt();
+  }
 
-  bool less_value(const ValueType &a, const ValueType &b) const { return comp(a, b); }
+  bool less_value(const ValueType &a, const ValueType &b) const {
+    return comp(a, b);
+  }
 
-  bool equal_value(const ValueType &a, const ValueType &b) const { return !comp(a, b) && !comp(b, a); }
+  bool equal_value(const ValueType &a, const ValueType &b) const {
+    return !comp(a, b) && !comp(b, a);
+  }
 
   void replace_child(Node *parent, Node *old_child, Node *new_child) {
     if (!parent) {
@@ -174,7 +185,8 @@ private:
     Node *node = nullptr;
     Node *root = nullptr;
     Node *sentinel = nullptr;
-    explicit TreapIterator(Node *n, Node *r, Node *s) : node(n), root(r), sentinel(s) {}
+    explicit TreapIterator(Node *n, Node *r, Node *s)
+        : node(n), root(r), sentinel(s) {}
     friend struct Treap;
 
   public:
@@ -254,32 +266,46 @@ private:
       return old;
     }
 
-    friend bool operator==(TreapIterator a, TreapIterator b) { return a.node == b.node; }
+    friend bool operator==(TreapIterator a, TreapIterator b) {
+      return a.node == b.node;
+    }
 
-    friend bool operator!=(TreapIterator a, TreapIterator b) { return !(a == b); }
+    friend bool operator!=(TreapIterator a, TreapIterator b) {
+      return !(a == b);
+    }
   };
 
 public:
-  Treap() : mt(std::random_device{}()) {
+  Treap() {
     sentinel.parent = nullptr;
     sentinel.left = nullptr;
     sentinel.right = nullptr;
   }
 
-  int size() const { return n; }
+  int size() const {
+    return n;
+  }
 
-  bool empty() const { return n == 0; }
+  bool empty() const {
+    return n == 0;
+  }
 
-  bool contains(const ValueType &val) const { return find_node(val) != nullptr; }
+  bool contains(const ValueType &val) const {
+    return find_node(val) != nullptr;
+  }
 
-  int count(const ValueType &val) const { return order_of_upper_bound(val) - order_of_lower_bound(val); }
+  int count(const ValueType &val) const {
+    return order_of_upper_bound(val) - order_of_lower_bound(val);
+  }
 
   TreapIterator kth_element(int k) {
     Node *t = kth_node(k);
     return TreapIterator(t, root, &sentinel);
   }
 
-  int index(const ValueType &val) const { return contains(val) ? order_of_lower_bound(val) : -1; }
+  int index(const ValueType &val) const {
+    return contains(val) ? order_of_lower_bound(val) : -1;
+  }
 
   int index(const TreapIterator &itr) const {
     Node *t = itr.node;
@@ -300,9 +326,13 @@ public:
     return TreapIterator(t ? t : &sentinel, root, &sentinel);
   }
 
-  ValueType &operator[](int k) { return kth_node(k)->value; }
+  ValueType &operator[](int k) {
+    return kth_node(k)->value;
+  }
 
-  const ValueType &operator[](int k) const { return kth_node(k)->value; }
+  const ValueType &operator[](int k) const {
+    return kth_node(k)->value;
+  }
 
   bool insert(const ValueType &val) {
     if (!root) {
@@ -387,7 +417,9 @@ public:
     return TreapIterator(b ? b : &sentinel, root, &sentinel);
   }
 
-  TreapIterator end() { return TreapIterator(&sentinel, root, &sentinel); }
+  TreapIterator end() {
+    return TreapIterator(&sentinel, root, &sentinel);
+  }
 
   TreapIterator lower_bound(const ValueType &val) {
     Node *cur = root;
