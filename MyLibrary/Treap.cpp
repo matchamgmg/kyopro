@@ -253,10 +253,9 @@ private:
 
   struct TreapIterator {
   private:
-    Node *node = nullptr;     ///< イテレータがさすノード
-    Node *root = nullptr;     ///< 根ノードを指す
-    Node *sentinel = nullptr; ///< Treap.end()->node
-    explicit TreapIterator(Node *n, Node *r, Node *s) : node(n), root(r), sentinel(s) {}
+    Node *node = nullptr;   ///< イテレータがさすノード
+    Treap *owner = nullptr; ///< イテレータが属するTreap
+    explicit TreapIterator(Node *n, Treap *o) : node(n), owner(o) {}
     friend struct Treap;
 
   public:
@@ -273,12 +272,12 @@ private:
     TreapIterator() = default;
 
     reference operator*() const {
-      assert(node != sentinel);
+      assert(node != &owner->sentinel);
       return node->value;
     }
 
     pointer operator->() const {
-      assert(node != sentinel);
+      assert(node != &owner->sentinel);
       return std::addressof(node->value);
     }
 
@@ -288,7 +287,7 @@ private:
      * ひとつ右のノードは，右子ノードの左子ノードを辿って行った葉ノード or 右親ノード
      */
     TreapIterator &operator++() {
-      assert(node != sentinel);
+      assert(node != &owner->sentinel);
       if (node->right) {
         node = node->right;
         while (node->left) {
@@ -300,7 +299,7 @@ private:
           node = par;
           par = node->parent;
         }
-        node = par ? par : sentinel;
+        node = par ? par : &owner->sentinel;
       }
       return *this;
     }
@@ -321,8 +320,8 @@ private:
      * itr == end() のときは，最大要素を指すイテレータを返す
      */
     TreapIterator &operator--() {
-      if (node == sentinel) {
-        node = root;
+      if (node == &owner->sentinel) {
+        node = owner->root;
         assert(node);
 
         while (node->right) {
@@ -342,7 +341,7 @@ private:
           node = par;
           par = node->parent;
         }
-        node = par ? par : sentinel;
+        node = par ? par : &owner->sentinel;
       }
       return *this;
     }
@@ -358,7 +357,7 @@ private:
     }
 
     friend bool operator==(const TreapIterator &a, const TreapIterator &b) {
-      return a.node == b.node;
+      return a.node == b.node && a.owner == b.owner;
     }
   };
 
@@ -390,7 +389,7 @@ public:
 
   TreapIterator kth_element(int k) {
     Node *t = kth_node(k);
-    return TreapIterator(t, root, &sentinel);
+    return TreapIterator(t, this);
   }
 
   int index(const ValueType &val) const {
@@ -398,6 +397,7 @@ public:
   }
 
   int index(const TreapIterator &itr) const {
+    assert(itr.owner == this);
     Node *t = itr.node;
     assert(t != &sentinel);
 
@@ -413,7 +413,7 @@ public:
 
   TreapIterator find(const ValueType &val) {
     Node *t = find_node(val);
-    return TreapIterator(t ? t : &sentinel, root, &sentinel);
+    return TreapIterator(t ? t : &sentinel, this);
   }
 
   ValueType &operator[](int k) {
@@ -494,6 +494,7 @@ public:
    * @todo 削除したノードの次のノードを指すイテレータを返す
    */
   void erase(TreapIterator itr) {
+    assert(itr.owner == this);
     assert(itr.node != &sentinel);
     erase_node(itr.node);
   }
@@ -526,14 +527,14 @@ public:
    */
   TreapIterator begin() {
     Node *b = min_node(root);
-    return TreapIterator(b ? b : &sentinel, root, &sentinel);
+    return TreapIterator(b ? b : &sentinel, this);
   }
 
   /**
    * @brief 最終要素の次を指すイテレータを返す
    */
   TreapIterator end() {
-    return TreapIterator(&sentinel, root, &sentinel);
+    return TreapIterator(&sentinel, this);
   }
 
   /**
@@ -552,7 +553,7 @@ public:
       }
     }
 
-    return TreapIterator(res ? res : &sentinel, root, &sentinel);
+    return TreapIterator(res ? res : &sentinel, this);
   }
 
   /**
@@ -571,7 +572,7 @@ public:
       }
     }
 
-    return TreapIterator(res ? res : &sentinel, root, &sentinel);
+    return TreapIterator(res ? res : &sentinel, this);
   }
 
   /**
