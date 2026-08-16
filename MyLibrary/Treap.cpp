@@ -1,8 +1,6 @@
 #include <bits/stdc++.h>
 
-template <class ValueType, class Compare = std::less<ValueType>,
-          bool Multi = false>
-struct Treap {
+template <class ValueType, class Compare = std::less<ValueType>, bool Multi = false> struct Treap {
 private:
   struct Node {
   private:
@@ -18,8 +16,7 @@ private:
 
   public:
     Node() = default;
-    explicit Node(const ValueType &val, const uint32_t pri)
-        : value(val), priority(pri) {}
+    explicit Node(const ValueType &val, const uint32_t pri) : value(val), priority(pri) {}
   };
 
   int n = 0;
@@ -29,16 +26,25 @@ private:
   Node *root = nullptr;
   Node sentinel;
 
+  /**
+   * @brief 部分木のサイズ
+   */
   int size(Node *t) const {
     return t ? t->siz : 0;
   }
 
+  /**
+   * @brief 部分木のサイズを更新
+   */
   void update(Node *t) const {
     if (t) {
       t->siz = 1 + size(t->left) + size(t->right);
     }
   }
 
+  /**
+   * @brief 部分木のサイズを更新しながら親ノードを辿る
+   */
   void update_up(Node *t) {
     while (t) {
       update(t);
@@ -46,18 +52,36 @@ private:
     }
   }
 
+  /**
+   * @brief 乱数を取得
+   */
   uint32_t next_priority() {
     return mt();
   }
 
+  /**
+   * @brief operator<
+   */
   bool less_value(const ValueType &a, const ValueType &b) const {
     return comp(a, b);
   }
 
+  /**
+   * @brief oprator==
+   */
   bool equal_value(const ValueType &a, const ValueType &b) const {
     return !comp(a, b) && !comp(b, a);
   }
 
+  /**
+   * @brief 子ノードを付け替える
+   *      /           /             /           /
+   *     par   ->    par     or    par   ->    par
+   *    /   \       /   \         /   \       /   \
+   *   old   ?     new   ?       ?    old    ?    new
+   *
+   * @pre old_childの親ノード情報は更新済み
+   */
   void replace_child(Node *parent, Node *old_child, Node *new_child) {
     if (!parent) {
       root = new_child;
@@ -72,54 +96,88 @@ private:
     }
   }
 
+  /**
+   * @brief 左回転
+   *       /           /
+   *      x    ->     r
+   *     / \         / \
+   *    l   r       x  rr
+   *       / \     / \
+   *      rl rr   l  rl
+   * @pre pri(x) < pri(r)
+   * で，それより下層のノードの優先度の大小関係は保たれている
+   */
   void rotate_left(Node *x) {
-    Node *y = x->right;
-    assert(y);
+    Node *r = x->right;
+    assert(r);
     Node *p = x->parent;
-    x->right = y->left;
+    // ここはおまけ
+    x->right = r->left;
     if (x->right) {
       x->right->parent = x;
     }
-    y->left = x;
-    x->parent = y;
-    replace_child(p, x, y);
+    // ここが本命
+    r->left = x;
+    x->parent = r;
+    replace_child(p, x, r);
     update(x);
-    update(y);
+    update(r);
   }
 
+  /**
+   * @brief 右回転
+   *       /           /
+   *      x    ->     l
+   *     / \         / \
+   *    l   r       ll  x
+   *   / \             / \
+   *  ll lr           lr  r
+   * @pre pri(x) < pri(l)
+   * で，それより下層のノードの優先度の大小関係は保たれている
+   */
   void rotate_right(Node *x) {
-    Node *y = x->left;
-    assert(y);
+    Node *l = x->left;
+    assert(l);
     Node *p = x->parent;
-    x->left = y->right;
+    // ここはおまけ
+    x->left = l->right;
     if (x->left) {
       x->left->parent = x;
     }
-    y->right = x;
-    x->parent = y;
-    replace_child(p, x, y);
+    // ここが本命
+    l->right = x;
+    x->parent = l;
+    replace_child(p, x, l);
     update(x);
-    update(y);
+    update(l);
   }
 
+  /**
+   * @brief ノードを検索
+   * 二分木上を根から探索
+   * @return ノードのポインタ．見つからなければnullptr
+   */
   Node *find_node(const ValueType &val) const {
     Node *cur = root;
 
     while (cur) {
-      if (equal_value(val, cur->value)) {
-        return cur;
-      }
-
       if (less_value(val, cur->value)) {
         cur = cur->left;
-      } else {
+      } else if (less_value(cur->value, val)) {
         cur = cur->right;
+      } else {
+        return cur;
       }
     }
 
     return nullptr;
   }
 
+  /**
+   * @brief ノードtを削除
+   * ノードtを葉ノードまでおろしてから，葉ノードを削除
+   * @todo 使わなくなったdeque上の領域を再利用
+   */
   void erase_node(Node *t) {
     while (t->left || t->right) {
       if (!t->left) {
@@ -139,6 +197,9 @@ private:
     --n;
   }
 
+  /**
+   * @brief 左からk番目のノードのポインタを返す
+   */
   Node *kth_node(int k) const {
     assert(0 <= k && k < n);
     Node *cur = root;
@@ -160,6 +221,9 @@ private:
     return nullptr;
   }
 
+  /**
+   * @brief 最も左のノードのポインタを返す
+   */
   Node *min_node(Node *t) const {
     if (!t) {
       return nullptr;
@@ -170,6 +234,9 @@ private:
     return t;
   }
 
+  /**
+   * @brief 最も右のノードのポインタを返す
+   */
   Node *max_node(Node *t) const {
     if (!t) {
       return nullptr;
@@ -180,16 +247,22 @@ private:
     return t;
   }
 
+  // ================================================
+  // TreapIterator
+  // ================================================
+
   struct TreapIterator {
   private:
-    Node *node = nullptr;
-    Node *root = nullptr;
-    Node *sentinel = nullptr;
-    explicit TreapIterator(Node *n, Node *r, Node *s)
-        : node(n), root(r), sentinel(s) {}
+    Node *node = nullptr;     ///< イテレータがさすノード
+    Node *root = nullptr;     ///< 根ノードを指す
+    Node *sentinel = nullptr; ///< Treap.end()->node
+    explicit TreapIterator(Node *n, Node *r, Node *s) : node(n), root(r), sentinel(s) {}
     friend struct Treap;
 
   public:
+    /**
+     * @brief 標準iteratorAPIとの連携
+     */
     using iterator_concept = std::bidirectional_iterator_tag;
     using iterator_category = std::bidirectional_iterator_tag;
     using value_type = ValueType;
@@ -199,16 +272,21 @@ private:
 
     TreapIterator() = default;
 
-    const ValueType &operator*() const {
+    reference operator*() const {
       assert(node != sentinel);
       return node->value;
     }
 
-    const ValueType *operator->() const {
+    pointer operator->() const {
       assert(node != sentinel);
       return std::addressof(node->value);
     }
 
+    /**
+     * @brief 前置インクリメント
+     * 更新後のイテレータの参照を返す
+     * ひとつ右のノードは，右子ノードの左子ノードを辿って行った葉ノード or 右親ノード
+     */
     TreapIterator &operator++() {
       assert(node != sentinel);
       if (node->right) {
@@ -227,12 +305,21 @@ private:
       return *this;
     }
 
+    /**
+     * @brief 後置インクリメント
+     * 更新前のイテレータのコピーを返す
+     */
     TreapIterator operator++(int) {
       TreapIterator old = *this;
       ++(*this);
       return old;
     }
 
+    /**
+     * @brief 前置デクリメント
+     * 更新後のイテレータの参照を返す
+     * itr == end() のときは，最大要素を指すイテレータを返す
+     */
     TreapIterator &operator--() {
       if (node == sentinel) {
         node = root;
@@ -260,18 +347,18 @@ private:
       return *this;
     }
 
+    /**
+     * @brief 後置デクリメント
+     * 更新前のイテレータのコピーを返す
+     */
     TreapIterator operator--(int) {
       TreapIterator old = *this;
       --(*this);
       return old;
     }
 
-    friend bool operator==(TreapIterator a, TreapIterator b) {
+    friend bool operator==(const TreapIterator &a, const TreapIterator &b) {
       return a.node == b.node;
-    }
-
-    friend bool operator!=(TreapIterator a, TreapIterator b) {
-      return !(a == b);
     }
   };
 
@@ -282,6 +369,9 @@ public:
     sentinel.right = nullptr;
   }
 
+  /**
+   * @brief 要素数を返す
+   */
   int size() const {
     return n;
   }
@@ -334,6 +424,9 @@ public:
     return kth_node(k)->value;
   }
 
+  /**
+   * @brief 新しいノードを作って適切な位置に挿入
+   */
   bool insert(const ValueType &val) {
     if (!root) {
       nodes.emplace_back(val, next_priority());
@@ -384,6 +477,9 @@ public:
     return true;
   }
 
+  /**
+   * @keyに一致するノードをひとつ削除
+   */
   bool erase(const ValueType &val) {
     Node *t = find_node(val);
     if (!t) {
@@ -393,11 +489,19 @@ public:
     return true;
   }
 
+  /**
+   * @brief イテレータのさすノードを削除
+   * @todo 削除したノードの次のノードを指すイテレータを返す
+   */
   void erase(TreapIterator itr) {
     assert(itr.node != &sentinel);
     erase_node(itr.node);
   }
 
+  /**
+   * @brief keyに一致する要素をすべて削除
+   * @return 削除された要素数
+   */
   int erase_all(const ValueType &val) {
     int cnt = 0;
 
@@ -412,15 +516,29 @@ public:
     return cnt;
   }
 
+  /**
+   * @todo clear()
+   * @brief 全要素の削除
+   */
+
+  /**
+   * @brief 最初の要素を指すイテレータを返す
+   */
   TreapIterator begin() {
     Node *b = min_node(root);
     return TreapIterator(b ? b : &sentinel, root, &sentinel);
   }
 
+  /**
+   * @brief 最終要素の次を指すイテレータを返す
+   */
   TreapIterator end() {
     return TreapIterator(&sentinel, root, &sentinel);
   }
 
+  /**
+   * @brief key以上の最初の要素を指すイテレータを返す（昇順のとき）
+   */
   TreapIterator lower_bound(const ValueType &val) {
     Node *cur = root;
     Node *res = nullptr;
@@ -437,6 +555,9 @@ public:
     return TreapIterator(res ? res : &sentinel, root, &sentinel);
   }
 
+  /**
+   * @brief keyより大きい最初の要素を指すイテレータを返す（昇順のとき）
+   */
   TreapIterator upper_bound(const ValueType &val) {
     Node *cur = root;
     Node *res = nullptr;
@@ -453,7 +574,10 @@ public:
     return TreapIterator(res ? res : &sentinel, root, &sentinel);
   }
 
-  // val未満の値の個数
+  /**
+   * @brief key未満の値の要素の個数を返す
+   * index(lower_bound(key))とほぼ等価
+   */
   int order_of_lower_bound(const ValueType &val) const {
     int res = 0;
     Node *cur = root;
@@ -469,7 +593,10 @@ public:
     return res;
   }
 
-  // val以下の値の個数
+  /**
+   * @brief key以下の値の要素の個数を返す
+   * index(upper_bound(key))とほぼ等価
+   */
   int order_of_upper_bound(const ValueType &val) const {
     int res = 0;
     Node *cur = root;
