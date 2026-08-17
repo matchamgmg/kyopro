@@ -22,6 +22,7 @@ private:
   int n = 0;
   inline static std::mt19937 mt{std::random_device{}()};
   std::deque<Node> nodes;
+  std::vector<Node *> free_list;
   Compare comp{};
   Node *root = nullptr;
   Node sentinel;
@@ -71,6 +72,37 @@ private:
    */
   bool equal_value(const ValueType &a, const ValueType &b) const {
     return !comp(a, b) && !comp(b, a);
+  }
+
+  /**
+   * @brief 新しいノードを作ってdequeに登録する
+   * free_listに空きがあればそちらから優先的に使う
+   * @return 新しいノードのポインタ
+   */
+  Node *new_node(const ValueType &val) {
+    if (!free_list.empty()) {
+      Node *t = free_list.back();
+      free_list.pop_back();
+
+      *t = Node(val, next_priority());
+      ++n;
+      return t;
+    } else {
+      nodes.emplace_back(val, next_priority());
+      ++n;
+      return &nodes.back();
+    }
+  }
+
+  /**
+   * @brief ノードを初期化してfree_listに登録する
+   */
+  void delete_node(Node *t) {
+    t->parent = nullptr;
+    t->left = nullptr;
+    t->right = nullptr;
+    free_list.push_back(t);
+    --n;
   }
 
   /**
@@ -176,7 +208,6 @@ private:
   /**
    * @brief ノードtを削除
    * ノードtを葉ノードまでおろしてから，葉ノードを削除
-   * @todo 使わなくなったdeque上の領域を再利用
    */
   void erase_node(Node *t) {
     while (t->left || t->right) {
@@ -194,7 +225,8 @@ private:
     Node *p = t->parent;
     replace_child(p, t, nullptr);
     update_up(p);
-    --n;
+
+    delete_node(t);
   }
 
   /**
@@ -429,9 +461,7 @@ public:
    */
   bool insert(const ValueType &val) {
     if (!root) {
-      nodes.emplace_back(val, next_priority());
-      root = &nodes.back();
-      ++n;
+      root = new_node(val);
       return true;
     }
 
@@ -453,8 +483,7 @@ public:
       }
     }
 
-    nodes.emplace_back(val, next_priority());
-    Node *z = &nodes.back();
+    Node *z = new_node(val);
 
     z->parent = par;
 
@@ -473,7 +502,6 @@ public:
         rotate_left(z->parent);
       }
     }
-    ++n;
     return true;
   }
 
@@ -492,6 +520,7 @@ public:
   /**
    * @brief イテレータのさすノードを削除
    * @todo 削除したノードの次のノードを指すイテレータを返す
+   * @note 削除されたノードを指すイテレータは無効
    */
   void erase(TreapIterator itr) {
     assert(itr.owner == this);
