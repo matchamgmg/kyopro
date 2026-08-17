@@ -519,13 +519,15 @@ public:
 
   /**
    * @brief イテレータのさすノードを削除
-   * @todo 削除したノードの次のノードを指すイテレータを返す
    * @note 削除されたノードを指すイテレータは無効
    */
-  void erase(TreapIterator itr) {
+  TreapIterator erase(const TreapIterator &itr) {
     assert(itr.owner == this);
     assert(itr.node != &sentinel);
+    TreapIterator res = itr;
+    ++res;
     erase_node(itr.node);
+    return res;
   }
 
   /**
@@ -547,9 +549,17 @@ public:
   }
 
   /**
-   * @todo clear()
    * @brief 全要素の削除
+   * @note 既存のイテレータはすべて無効
    */
+  void clear() {
+    for (auto itr = this->begin(); itr != this->end(); ++itr) {
+      Node *t = itr.node;
+      free_list.push_back(t);
+    }
+    root = nullptr;
+    n = 0;
+  }
 
   /**
    * @brief 最初の要素を指すイテレータを返す
