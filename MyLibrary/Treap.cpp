@@ -3,7 +3,9 @@
 template <class ValueType, class Compare = std::less<ValueType>, bool Multi = false> struct Treap {
 private:
   struct Node {
-  private:
+    friend struct Treap;
+    template <bool> friend struct TreapIteratorBase;
+
     ValueType value{};
     int siz = 1;
     uint32_t priority;
@@ -11,10 +13,6 @@ private:
     Node *left = nullptr;
     Node *right = nullptr;
 
-    friend struct Treap;
-    friend struct TreapIterator;
-
-  public:
     Node() = default;
     explicit Node(const ValueType &val, const uint32_t pri) : value(val), priority(pri) {}
   };
@@ -30,7 +28,7 @@ private:
   /**
    * @brief 部分木のサイズ
    */
-  int size(Node *t) const {
+  int size(const Node *t) const {
     return t ? t->siz : 0;
   }
 
@@ -279,16 +277,65 @@ private:
     return t;
   }
 
+  /**
+   * @brief lower_bound
+   * @return 見つかったノードのポインタ
+   */
+  Node *lower_bound_node(const ValueType &val) const {
+    Node *cur = root;
+    Node *res = nullptr;
+
+    while (cur) {
+      if (!less_value(cur->value, val)) {
+        res = cur;
+        cur = cur->left;
+      } else {
+        cur = cur->right;
+      }
+    }
+
+    return res;
+  }
+
+  /**
+   * @brief upper_bound
+   * @return 見つかったノードのポインタ
+   */
+  Node *upper_bound_node(const ValueType &val) const {
+    Node *cur = root;
+    Node *res = nullptr;
+
+    while (cur) {
+      if (less_value(val, cur->value)) {
+        res = cur;
+        cur = cur->left;
+      } else {
+        cur = cur->right;
+      }
+    }
+
+    return res;
+  }
+
   // ================================================
   // TreapIterator
   // ================================================
 
-  struct TreapIterator {
+  /**
+   * @brief TreapIterator and ConstTreapIterator
+   */
+  template <bool IsConst> struct TreapIteratorBase {
   private:
-    Node *node = nullptr;   ///< イテレータがさすノード
-    Treap *owner = nullptr; ///< イテレータが属するTreap
-    explicit TreapIterator(Node *n, Treap *o) : node(n), owner(o) {}
+    using TreapPointer = std::conditional_t<IsConst, const Treap *, Treap *>;
+    using NodePointer = std::conditional_t<IsConst, const Node *, Node *>;
+
+    NodePointer node = nullptr;
+    TreapPointer owner = nullptr;
+
+    explicit TreapIteratorBase(NodePointer n, TreapPointer o) : node(n), owner(o) {}
     friend struct Treap;
+
+    template <bool> friend struct TreapIteratorBase;
 
   public:
     /**
@@ -301,7 +348,14 @@ private:
     using reference = const ValueType &;
     using pointer = const ValueType *;
 
-    TreapIterator() = default;
+    TreapIteratorBase() = default;
+
+    /**
+     * @brief TreapIterator -> ConstTreapIteratorへの変換コンストラクタ
+     */
+    template <bool B = IsConst>
+      requires B
+    TreapIteratorBase(const TreapIteratorBase<false> &itr) : node(itr.node), owner(itr.owner) {}
 
     reference operator*() const {
       assert(node != &owner->sentinel);
@@ -318,7 +372,7 @@ private:
      * 更新後のイテレータの参照を返す
      * ひとつ右のノードは，右子ノードの左子ノードを辿って行った葉ノード or 右親ノード
      */
-    TreapIterator &operator++() {
+    TreapIteratorBase &operator++() {
       assert(node != &owner->sentinel);
       if (node->right) {
         node = node->right;
@@ -326,7 +380,7 @@ private:
           node = node->left;
         }
       } else {
-        Node *par = node->parent;
+        NodePointer par = node->parent;
         while (par && node == par->right) {
           node = par;
           par = node->parent;
@@ -340,8 +394,8 @@ private:
      * @brief 後置インクリメント
      * 更新前のイテレータのコピーを返す
      */
-    TreapIterator operator++(int) {
-      TreapIterator old = *this;
+    TreapIteratorBase operator++(int) {
+      TreapIteratorBase old = *this;
       ++(*this);
       return old;
     }
@@ -351,7 +405,7 @@ private:
      * 更新後のイテレータの参照を返す
      * itr == end() のときは，最大要素を指すイテレータを返す
      */
-    TreapIterator &operator--() {
+    TreapIteratorBase &operator--() {
       if (node == &owner->sentinel) {
         node = owner->root;
         assert(node);
@@ -368,7 +422,7 @@ private:
           node = node->right;
         }
       } else {
-        Node *par = node->parent;
+        NodePointer par = node->parent;
         while (par && node == par->left) {
           node = par;
           par = node->parent;
@@ -382,22 +436,80 @@ private:
      * @brief 後置デクリメント
      * 更新前のイテレータのコピーを返す
      */
-    TreapIterator operator--(int) {
-      TreapIterator old = *this;
+    TreapIteratorBase operator--(int) {
+      TreapIteratorBase old = *this;
       --(*this);
       return old;
     }
 
-    friend bool operator==(const TreapIterator &a, const TreapIterator &b) {
+    friend bool operator==(const TreapIteratorBase &a, const TreapIteratorBase &b) {
       return a.node == b.node && a.owner == b.owner;
     }
   };
 
+  using TreapIterator = TreapIteratorBase<false>;
+  using ConstTreapIterator = TreapIteratorBase<true>;
+
 public:
-  Treap() {
-    sentinel.parent = nullptr;
-    sentinel.left = nullptr;
-    sentinel.right = nullptr;
+  Treap() = default;
+
+  /**
+   * @brief コピーコンストラクタ
+   */
+  Treap(const Treap &tr) : comp(tr.comp) {
+    for (const ValueType &val : tr) {
+      insert(val);
+    }
+  }
+
+  /**
+   * @brief ムーブコンストラクタ
+   * @note deque内の要素のメモリ上の配置は変化しないので，ポインタを渡しても大丈夫
+   * @note ムーブ元のイテレータは無効
+   */
+  Treap(Treap &&tr)
+      : n(tr.n), nodes(std::move(tr.nodes)), free_list(std::move(tr.free_list)), comp(std::move(tr.comp)),
+        root(tr.root) {
+    tr.n = 0;
+    tr.root = nullptr;
+    tr.free_list.clear();
+  }
+
+  /**
+   * @brief コピー代入演算子
+   */
+  Treap &operator=(const Treap &tr) {
+    if (this == &tr) {
+      return *this;
+    }
+    comp = tr.comp;
+    clear();
+    for (const ValueType &val : tr) {
+      insert(val);
+    }
+    return *this;
+  }
+
+  /**
+   * @brief ムーブ代入演算子
+   * @note 古いイテレータは，ムーブ元・ムーブ先どちらも無効
+   */
+  Treap &operator=(Treap &&tr) noexcept {
+    if (this == &tr) {
+      return *this;
+    }
+
+    nodes = std::move(tr.nodes);
+    free_list = std::move(tr.free_list);
+    comp = std::move(tr.comp);
+    n = tr.n;
+    root = tr.root;
+
+    tr.n = 0;
+    tr.root = nullptr;
+    tr.free_list.clear();
+
+    return *this;
   }
 
   /**
@@ -424,13 +536,18 @@ public:
     return TreapIterator(t, this);
   }
 
+  ConstTreapIterator kth_element(int k) const {
+    Node *t = kth_node(k);
+    return ConstTreapIterator(t, this);
+  }
+
   int index(const ValueType &val) const {
     return contains(val) ? order_of_lower_bound(val) : -1;
   }
 
-  int index(const TreapIterator &itr) const {
+  template <bool IsConst> int index(const TreapIteratorBase<IsConst> &itr) const {
     assert(itr.owner == this);
-    Node *t = itr.node;
+    const Node *t = itr.node;
     assert(t != &sentinel);
 
     int res = size(t->left);
@@ -448,8 +565,9 @@ public:
     return TreapIterator(t ? t : &sentinel, this);
   }
 
-  ValueType &operator[](int k) {
-    return kth_node(k)->value;
+  ConstTreapIterator find(const ValueType &val) const {
+    Node *t = find_node(val);
+    return ConstTreapIterator(t ? t : &sentinel, this);
   }
 
   const ValueType &operator[](int k) const {
@@ -577,41 +695,58 @@ public:
   }
 
   /**
+   * @brief 最初の要素を指すconstイテレータを返す
+   */
+  ConstTreapIterator begin() const {
+    const Node *b = min_node(root);
+    return ConstTreapIterator(b ? b : &sentinel, this);
+  }
+
+  /**
+   * @brief 最終要素の次を指すconstイテレータを返す
+   */
+  ConstTreapIterator end() const {
+    return ConstTreapIterator(&sentinel, this);
+  }
+
+  ConstTreapIterator cbegin() const {
+    return begin();
+  }
+
+  ConstTreapIterator cend() const {
+    return end();
+  }
+
+  /**
    * @brief key以上の最初の要素を指すイテレータを返す（昇順のとき）
    */
   TreapIterator lower_bound(const ValueType &val) {
-    Node *cur = root;
-    Node *res = nullptr;
-
-    while (cur) {
-      if (!less_value(cur->value, val)) {
-        res = cur;
-        cur = cur->left;
-      } else {
-        cur = cur->right;
-      }
-    }
-
-    return TreapIterator(res ? res : &sentinel, this);
+    Node *t = lower_bound_node(val);
+    return TreapIterator(t ? t : &sentinel, this);
   }
 
   /**
    * @brief keyより大きい最初の要素を指すイテレータを返す（昇順のとき）
    */
   TreapIterator upper_bound(const ValueType &val) {
-    Node *cur = root;
-    Node *res = nullptr;
+    Node *t = upper_bound_node(val);
+    return TreapIterator(t ? t : &sentinel, this);
+  }
 
-    while (cur) {
-      if (less_value(val, cur->value)) {
-        res = cur;
-        cur = cur->left;
-      } else {
-        cur = cur->right;
-      }
-    }
+  /**
+   * @brief key以上の最初の要素を指すconstイテレータを返す（昇順のとき）
+   */
+  ConstTreapIterator lower_bound(const ValueType &val) const {
+    Node *t = lower_bound_node(val);
+    return ConstTreapIterator(t ? t : &sentinel, this);
+  }
 
-    return TreapIterator(res ? res : &sentinel, this);
+  /**
+   * @brief keyより大きい最初の要素を指すconstイテレータを返す（昇順のとき）
+   */
+  ConstTreapIterator upper_bound(const ValueType &val) const {
+    Node *t = upper_bound_node(val);
+    return ConstTreapIterator(t ? t : &sentinel, this);
   }
 
   /**
@@ -675,4 +810,6 @@ int main() {
   std::cout << tp.index(3) << std::endl;
   auto itr = tp.find(3);
   std::cout << tp.index(itr) << std::endl;
+
+  // Treap<int> tp2(tp);
 }
