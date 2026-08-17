@@ -882,7 +882,7 @@ int main() {
 
   int N, Q;
   cin >> N >> Q;
-  vector<set<int>> st(N);
+  vector<Treap<int>> st(N);
   rep(i, 0, N) {
     int c;
     cin >> c;
@@ -899,7 +899,7 @@ int main() {
     {
       auto itr = st[a].begin();
       while (itr != st[a].end()) {
-        st[b].insert(*itr);
+        st[b].emplace(*itr);
         itr = st[a].erase(itr);
       }
     }
