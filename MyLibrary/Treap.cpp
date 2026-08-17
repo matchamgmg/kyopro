@@ -1,5 +1,12 @@
 #include <bits/stdc++.h>
 
+/**
+ * @brief 平衡二分探索木
+ * @tparam ValueTpye : 要素の型．デフォルトコンストラクタが必要
+ * @tparam Compare : ValueTypeの比較関数．struct ValueType のメソッドとしてbool operator<(const ValueType &rhs) const
+ * が定義されていればOK
+ * @tparam Multi : true...重複要素を別ノードとして管理．false...重複要素を持たない
+ */
 template <class ValueType, class Compare = std::less<ValueType>, bool Multi = false> struct Treap {
 private:
   struct Node {
@@ -8,13 +15,15 @@ private:
 
     ValueType value{};
     int siz = 1;
-    uint32_t priority;
+    uint32_t priority = 0;
     Node *parent = nullptr;
     Node *left = nullptr;
     Node *right = nullptr;
 
     Node() = default;
+
     explicit Node(const ValueType &val, const uint32_t pri) : value(val), priority(pri) {}
+    explicit Node(ValueType &&val, const uint32_t pri) : value(std::move(val)), priority(pri) {}
   };
 
   int n = 0;
@@ -76,17 +85,18 @@ private:
    * @brief 新しいノードを作ってdequeに登録する
    * free_listに空きがあればそちらから優先的に使う
    * @return 新しいノードのポインタ
+   * @tparam T = const ValueType& or ValueType&&
    */
-  Node *new_node(const ValueType &val) {
+  template <class T> Node *new_node(T &&val) {
     if (!free_list.empty()) {
       Node *t = free_list.back();
       free_list.pop_back();
 
-      *t = Node(val, next_priority());
+      *t = Node(std::forward<T>(val), next_priority());
       ++n;
       return t;
     } else {
-      nodes.emplace_back(val, next_priority());
+      nodes.emplace_back(std::forward<T>(val), next_priority());
       ++n;
       return &nodes.back();
     }
@@ -201,6 +211,56 @@ private:
     }
 
     return nullptr;
+  }
+
+  /**
+   * @brief 新しいノードを作って適切な位置に挿入
+   * @tparam T = const ValueType& or ValueType&&
+   */
+  template <class T> bool insert_impl(T &&val) {
+    if (!root) {
+      root = new_node(std::forward<T>(val));
+      return true;
+    }
+
+    Node *cur = root;
+    Node *par = nullptr;
+    while (cur) {
+      par = cur;
+
+      if constexpr (!Multi) {
+        if (equal_value(val, cur->value)) {
+          return false;
+        }
+      }
+
+      if (less_value(val, cur->value)) {
+        cur = cur->left;
+      } else {
+        cur = cur->right;
+      }
+    }
+
+    Node *z = new_node(std::forward<T>(val));
+
+    z->parent = par;
+
+    if (less_value(z->value, par->value)) {
+      par->left = z;
+    } else {
+      par->right = z;
+    }
+
+    update_up(par);
+
+    while (z->parent && z->priority > z->parent->priority) {
+      if (z == z->parent->left) {
+        rotate_right(z->parent);
+      } else {
+        rotate_left(z->parent);
+      }
+    }
+    return true;
   }
 
   /**
@@ -575,52 +635,25 @@ public:
   }
 
   /**
-   * @brief 新しいノードを作って適切な位置に挿入
+   * @brief ノードの挿入（インスタンスを渡したとき）
    */
   bool insert(const ValueType &val) {
-    if (!root) {
-      root = new_node(val);
-      return true;
-    }
+    return insert_impl(val);
+  }
 
-    Node *cur = root;
-    Node *par = nullptr;
-    while (cur) {
-      par = cur;
+  /**
+   * @brief ノードの挿入（右辺値を渡したとき）
+   */
+  bool insert(ValueType &&val) {
+    return insert_impl(std::move(val));
+  }
 
-      if constexpr (!Multi) {
-        if (equal_value(val, cur->value)) {
-          return false;
-        }
-      }
-
-      if (less_value(val, cur->value)) {
-        cur = cur->left;
-      } else {
-        cur = cur->right;
-      }
-    }
-
-    Node *z = new_node(val);
-
-    z->parent = par;
-
-    if (less_value(val, par->value)) {
-      par->left = z;
-    } else {
-      par->right = z;
-    }
-
-    update_up(par);
-
-    while (z->parent && z->priority > z->parent->priority) {
-      if (z == z->parent->left) {
-        rotate_right(z->parent);
-      } else {
-        rotate_left(z->parent);
-      }
-    }
-    return true;
+  /**
+   * @brief ノードの挿入（コンストラクタの引数を渡したとき）
+   */
+  template <class... Args> bool emplace(Args &&...args) {
+    ValueType val(std::forward<Args>(args)...);
+    return insert_impl(std::move(val));
   }
 
   /**
