@@ -844,5 +844,9 @@ int main() {
   auto itr = tp.find(3);
   std::cout << tp.index(itr) << std::endl;
 
-  // Treap<int> tp2(tp);
+  Treap<int> tp2(tp);
+  for (const int &x : tp2) {
+    std::cout << x << ' ';
+  }
+  std::cout << std::endl;
 }
