@@ -1,73 +1,157 @@
-#include <atcoder/all>
 #include <bits/stdc++.h>
-using namespace std;
 
-/*
-全方位木DP
-重みなしver. と重みありver.
+/**
+ * @brief 全方位木DPに必要な演算の制約
+ * @note (T, op, e) はモノイドをなす必要がある
+ *
+ * @tparam T 乗せるデータの型
+ * @tparam V 頂点重みの型
+ * @tparam E 辺重みの型
+ * @tparam op 結合律を満たす二項演算
+ * @tparam e 二項演算の単位元を返す関数
+ * @tparam apply_vertex 頂点重みを加える演算
+ * @tparam apply_edge 辺重みを加える演算
+ */
+template <class T, class V, class E, auto op, auto e, auto apply_vertex, auto apply_edge>
+concept rerooting_concept = requires(const T &a, const T &b, const V &vertex_weight, const E &edge_weight) {
+  { op(a, b) } -> std::same_as<T>;
+  { e() } -> std::same_as<T>;
+  { apply_vertex(a, vertex_weight) } -> std::same_as<T>;
+  { apply_edge(a, edge_weight) } -> std::same_as<T>;
+};
 
-自分自身に関する値を適切に設定する必要がある
-    dfs1の葉ノードの初期値
-    dfs2の累積mergeの初期値
-*/
+template <class T, class V, class E, auto op, auto e, auto apply_vertex, auto apply_edge>
+  requires rerooting_concept<T, V, E, op, e, apply_vertex, apply_edge>
+class Rerooting {
+  struct Edge {
+    int to;
+    E edge_weight;
+  };
 
-// 重みなしver.
-template <class T, auto e, auto merge, auto add_root> struct Rerooting {
-  vector<vector<T>> dp;
-  vector<T> ans;
-  vector<vector<int>> G;
-
-  Rerooting() {}
-  Rerooting(int N) : G(N) {
-    dp.resize(N);
-    ans.assign(N, e());
-  }
-  Rerooting(vector<vector<int>> F) : G(F) {
-    int N = F.size();
-    dp.resize(N);
-    ans.assign(N, e());
-  }
-
-  void add_edge(int a, int b) { G[a].push_back(b); }
-  void build() { // 全方位木DP
-    dfs1(0);
-    dfs2(0);
-  }
-
-  T dfs1(int u, int p = -1) {
-    T dp_cum = e();
-    int siz = G[u].size();
-    dp[u].assign(siz, e());
-    for (int i = 0; i < siz; ++i) {
-      int v = G[u][i];
-      if (v == p)
+  T dfs1(int u = 0, int par = -1) {
+    int s = G[u].size();
+    dp[u].assign(s, e());
+    T res = e();
+    for (int i = 0; i < s; ++i) {
+      auto [v, vu] = G[u][i];
+      if (v == par) {
         continue;
-      dp[u][i] = dfs(v, u);
-      dp_cum = merge(dp_cum, dp[u][i]);
+      }
+      dp[u][i] = apply_edge(dfs1(v, u), vu);
+      res = op(res, dp[u][i]);
     }
-    return add_root(dp_cum);
+    return apply_vertex(res, vertex_weight[u]);
   }
-  void dfs2(int u, const T &dp_p, int p = -1) {
-    int siz = G[u].size();
-    for (int i = 0; i < siz; ++i) {
-      if (G[u][i] == p)
-        dp[u][i] = dp_p;
+
+  void dfs2(int u = 0, int par = -1, const T &dp_par = e()) {
+    int s = G[u].size();
+    for (int i = 0; i < s; ++i) {
+      auto [v, vu] = G[u][i];
+      if (v == par) {
+        dp[u][i] = apply_edge(dp_par, vu);
+      }
     }
-    vector<T> dp_l(siz + 1, e()), dp_r(siz + 1, e());
-    for (int i = 0; i < siz; ++i) {
-      dp_l[i + 1] = merge(dp_l[i], dp[u][i]);
+
+    std::vector<T> dp_left(s + 1, e()), dp_right(s + 1, e());
+    for (int i = 0; i < s; ++i) {
+      dp_left[i + 1] = op(dp_left[i], dp[u][i]);
     }
-    for (int i = siz - 1; i >= 0; --i) {
-      dp_r[i] = merge(dp_r[i + 1], dp[u][i]);
+    for (int i = s - 1; i >= 0; --i) {
+      dp_right[i] = op(dp[u][i], dp_right[i + 1]);
     }
-    ans[u] = add_root(dp_l[siz]);
-    for (int i = 0; i < siz; ++i) {
-      int v = G[u][i];
-      if (v == p)
+    ans[u] = apply_vertex(dp_left[s], vertex_weight[u]);
+
+    for (int i = 0; i < s; ++i) {
+      auto [v, _] = G[u][i];
+      if (v == par) {
         continue;
-      dfs2(v, add_root(merge(dp_l[i], dp_r[i + 1])), u);
+      }
+      dfs2(v, u, apply_vertex(op(dp_left[i], dp_right[i + 1]), vertex_weight[u]));
     }
+  }
+
+public:
+  int n;
+  std::vector<V> vertex_weight;
+  std::vector<std::vector<Edge>> G;
+  std::vector<std::vector<T>> dp;
+  std::vector<T> ans;
+
+  Rerooting(int n_)
+      : n(n_), vertex_weight(std::vector<V>(n_)), G(std::vector<std::vector<Edge>>(n_)),
+        dp(std::vector<std::vector<T>>(n_)), ans(std::vector<T>(n_)) {}
+  Rerooting(const std::vector<V> &vec_)
+      : n(vec_.size()), vertex_weight(vec_), G(std::vector<std::vector<Edge>>(vec_.size())),
+        dp(std::vector<std::vector<T>>(vec_.size())), ans(std::vector<T>(vec_.size())) {}
+
+  void set_vertex_weight(const std::vector<V> &vec_) {
+    vertex_weight = vec_;
+  }
+  void set_vertex_weight(int pos, const V &v) {
+    assert(0 <= pos && pos < n);
+    vertex_weight[pos] = v;
+  }
+  // 内部的には逆辺の重みをもつ
+  void add_edge(int u, int v, const E &uv, const E &vu) {
+    assert(0 <= u && u < n && 0 <= v && v < n);
+    G[u].emplace_back(v, vu);
+    G[v].emplace_back(u, uv);
+  }
+
+  void build() {
+    dfs1();
+    dfs2();
+  }
+
+  const std::vector<T> &get_answer() const {
+    return ans;
+  }
+
+  const T &operator[](int pos) const {
+    assert(0 <= pos && pos < n);
+    return ans[pos];
   }
 };
 
-int main() {}
+/* verify ABC220-F */
+
+using namespace std;
+using ll = long long;
+
+struct T {
+  ll val;
+  ll siz;
+};
+
+T op(const T &a, const T &b) {
+  return T{a.val + b.val, a.siz + b.siz};
+}
+T e() {
+  return T{0, 0};
+}
+T apply_vertex(const T &a, ll x) {
+  return T{a.val, a.siz + x};
+}
+T apply_edge(const T &a, ll x) {
+  return T{a.val + x * a.siz, a.siz};
+}
+
+int main() {
+  int N;
+  cin >> N;
+
+  Rerooting<T, ll, ll, op, e, apply_vertex, apply_edge> rerooting(N);
+  for (int i = 0; i < N; ++i) {
+    rerooting.set_vertex_weight(i, 1);
+  }
+  for (int i = 0; i < N - 1; ++i) {
+    int u, v;
+    cin >> u >> v;
+    u--, v--;
+    rerooting.add_edge(u, v, 1, 1);
+  }
+  rerooting.build();
+  for (int i = 0; i < N; ++i) {
+    cout << rerooting[i].val << endl;
+  }
+}
