@@ -65,16 +65,29 @@ int main() {
   rep(i, 0, N) {
     cin >> A[i];
   }
+
+  // ll sum = 0;
+  // map<ll, ll> mp;
+  // mp[sum]++;
+  // rep(i, 0, N) {
+  //   sum += A[i];
+  //   mp[sum]++;
+  // }
+
+  // ll ans = 0;
+  // for (auto [s, x] : mp) {
+  //   ans += x * (x - 1) / 2;
+  // }
+  // cout << ans << endl;
+
   ll sum = 0;
-  map<ll, ll> mp;
+  mp<ll, ll> mp;
   mp[sum]++;
+  ll ans = 0;
   rep(i, 0, N) {
     sum += A[i];
+    ans += mp[sum];
     mp[sum]++;
-  }
-  ll ans = 0;
-  for (auto [s, x] : mp) {
-    ans += x * (x - 1) / 2;
   }
   cout << ans << endl;
 }
