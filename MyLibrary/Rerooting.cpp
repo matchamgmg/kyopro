@@ -33,7 +33,7 @@ class Rerooting {
     dp[u].assign(s, e());
     T res = e();
     for (int i = 0; i < s; ++i) {
-      auto [v, vu] = G[u][i];
+      const auto &[v, vu] = G[u][i];
       if (v == par) {
         continue;
       }
@@ -46,7 +46,7 @@ class Rerooting {
   void dfs2(int u = 0, int par = -1, const T &dp_par = e()) {
     int s = G[u].size();
     for (int i = 0; i < s; ++i) {
-      auto [v, vu] = G[u][i];
+      const auto &[v, vu] = G[u][i];
       if (v == par) {
         dp[u][i] = apply_edge(dp_par, vu);
       }
@@ -62,7 +62,7 @@ class Rerooting {
     ans[u] = apply_vertex(dp_left[s], vertex_weight[u]);
 
     for (int i = 0; i < s; ++i) {
-      auto [v, _] = G[u][i];
+      const auto &[v, _] = G[u][i];
       if (v == par) {
         continue;
       }
@@ -85,6 +85,7 @@ public:
         dp(std::vector<std::vector<T>>(vec_.size())), ans(std::vector<T>(vec_.size())) {}
 
   void set_vertex_weight(const std::vector<V> &vec_) {
+    assert(n == vec_.size());
     vertex_weight = vec_;
   }
   void set_vertex_weight(int pos, const V &v) {
