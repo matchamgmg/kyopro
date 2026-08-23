@@ -58,7 +58,11 @@ template <long long MOD = 998244353> class Modint {
       std::swap(s, t);
     }
     assert(s == 1);
-    return (x % MOD + MOD) % MOD;
+    x %= MOD;
+    if (x < 0) {
+      x += MOD;
+    }
+    return x;
   }
 
   long long pow_impl(long long x) const {
@@ -84,7 +88,10 @@ template <long long MOD = 998244353> class Modint {
 
 public:
   Modint(const long long &x) {
-    value = (x % MOD + MOD) % MOD;
+    value = x % MOD;
+    if (value < 0) {
+      value += MOD;
+    }
   }
 
   Modint &operator+=(const Modint &rhs) {
