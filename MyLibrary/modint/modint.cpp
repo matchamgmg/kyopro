@@ -51,11 +51,13 @@ template <long long MOD = 998244353> class Modint {
    */
   long long inv_impl() const {
     long long x = 1, u = 0, s = value, t = MOD;
+    long long k;
     while (t) {
-      x -= s / t * u;
-      std::swap(x, u);
-      s -= s / t * t;
+      k = s / t;
+      s -= k * t;
       std::swap(s, t);
+      x -= k * u;
+      std::swap(x, u);
     }
     assert(s == 1);
     x %= MOD;
@@ -87,7 +89,7 @@ template <long long MOD = 998244353> class Modint {
   }
 
 public:
-  Modint(const long long &x) {
+  Modint(long long x) {
     value = x % MOD;
     if (value < 0) {
       value += MOD;
