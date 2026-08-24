@@ -89,6 +89,8 @@ template <long long MOD = 998244353> class Modint {
   }
 
 public:
+  Modint() : value(0) {}
+
   Modint(long long x) {
     value = x % MOD;
     if (value < 0) {
