@@ -140,6 +140,8 @@ template <long long MOD = 998244353> class ModCombination {
   std::vector<Mint> factorial_inv;
 
 public:
+  ModCombination() {}
+
   ModCombination(int n_)
       : n(n_), inv(std::vector<Mint>(n_ + 1)), factorial(std::vector<Mint>(n_ + 1)),
         factorial_inv(std::vector<Mint>(n_ + 1)) {
@@ -189,6 +191,8 @@ template <long long MOD = 998244353> class ModCombinationWithBigFixedN {
   std::vector<Mint> comb;
 
 public:
+  ModCombinationWithBigFixedN() {}
+
   ModCombinationWithBigFixedN(int n_, int k_)
       : n(n_), k(k_), inv(std::vector<Mint>(k_ + 1)), comb(std::vector<Mint>(k_ + 1)) {
     inv[1] = 1;
@@ -222,6 +226,8 @@ template <long long MOD = 998244353> class ModCombinationSmall {
   std::vector<std::vector<Mint>> comb;
 
 public:
+  ModCombinationSmall() {}
+
   ModCombinationSmall(int n_) : n(n_), comb(std::vector<std::vector<Mint>>(n_ + 1, std::vector<Mint>(n_ + 1))) {
     for (int i = 0; i <= n; ++i) {
       comb[i][i] = 1;
