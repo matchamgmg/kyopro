@@ -1,3 +1,7 @@
+/**
+ * https://github.com/matchamgmg/kyopro/tree/main
+ */
+
 #include <bits/stdc++.h>
 
 #include <atcoder/all>

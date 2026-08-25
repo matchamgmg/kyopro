@@ -1,0 +1,97 @@
+#include <bits/stdc++.h>
+
+#include <atcoder/all>
+using namespace std;
+using namespace atcoder;
+using ll = long long;
+using ld = long double;
+using mint = modint998244353;
+// using mint = modint1000000007;
+template <class T> using pq = priority_queue<T, vector<T>>;               // 大きい順
+template <class T> using pq_g = priority_queue<T, vector<T>, greater<T>>; // 小さい順
+
+#define rep(i, s, n) for (int i = (s); i < (int)(n); i++)
+#define rrep(i, s, n) for (int i = (n - 1); i >= (int)(s); i--)
+#define all(a) a.begin(), a.end()
+#define rall(a) a.rbegin(), a.rend()
+void pyes() {
+  cout << "Yes" << endl;
+}
+void pno() {
+  cout << "No" << endl;
+}
+void YN(bool x) {
+  cout << (x ? "Yes" : "No") << endl;
+}
+template <class T> void v_cout(const vector<T> &a) {
+  int n = a.size();
+  rep(i, 0, n) cout << a[i] << " ";
+  cout << endl;
+}
+template <class T> void vv_cout(const vector<T> &a) {
+  int n = a.size();
+  rep(i, 0, n) {
+    rep(j, 0, a[i].size()) cout << a[i][j] << " ";
+    cout << endl;
+  }
+}
+bool grid_check(int x, int y, int X, int Y) {
+  return (0 <= x && x < X && 0 <= y && y < Y);
+}
+template <class T> bool chmax(T &a, T b) {
+  if (a < b) {
+    a = b;
+    return true;
+  } else {
+    return false;
+  }
+}
+template <class T> bool chmin(T &a, T b) {
+  if (a > b) {
+    a = b;
+    return true;
+  } else {
+    return false;
+  }
+}
+
+int main() {
+  ios::sync_with_stdio(false);
+  cin.tie(nullptr);
+
+  int N, K;
+  cin >> N >> K;
+  string S;
+  cin >> S;
+
+  auto f = [&](double m) -> bool {
+    vector<double> v(N);
+    rep(i, 0, N) {
+      v[i] = (S[i] == 'o') - m;
+    }
+    double res = -1e18;
+    double l_min = 1e18;
+    double l_sum = 0, r_sum = 0;
+    int l_win = 0, r_win = 0;
+    int l = -1;
+    rep(r, 0, N) {
+      r_win += (S[r] == 'o');
+      r_sum += v[r];
+      while (l < r && r_win - l_win >= K) {
+        chmin(l_min, l_sum);
+        ++l;
+        l_win += (S[l] == 'o');
+        l_sum += v[l];
+      }
+      chmax(res, r_sum - l_min);
+    }
+    return res > -1e-10;
+  };
+
+  double ok = -1e-5, ng = 1 + 1e-5;
+  while (ng - ok > 1e-9) {
+    double mid = (ok + ng) / 2;
+    (f(mid) ? ok : ng) = mid;
+  }
+  cout << fixed << setprecision(10) << ok << endl;
+}
