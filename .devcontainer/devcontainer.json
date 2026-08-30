@@ -1,0 +1,9 @@
+{
+    "name": "kyopro",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    "containerEnv": {
+        "ACL_PATH": "/opt/ac-library"
+    }
+}
