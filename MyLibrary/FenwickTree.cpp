@@ -1,140 +1,113 @@
 #include <bits/stdc++.h>
-using namespace std;
 
-template <class T>
-struct BIT
-{
-    BIT(int n_) : n(n_), data(n_ + 1) {}
-
-    void add(int p, T x = 1)
-    {
-        for (++p; p <= n; p += p & -p)
-        {
-            data[p] += x;
-        }
-    }
-
-    // [0, p)
-    T prefix_sum(int p)
-    {
-        T res = 0;
-        for (; p > 0; p -= p & -p)
-        {
-            res += data[p];
-        }
-        return res;
-    }
-
-    // [l, r)
-    T sum(int l, int r)
-    {
-        return prefix_sum(r) - prefix_sum(l);
-    }
-
-    // binary_search
-    // sum[0,k] >= v となる最小のkを返す
-    // 存在しない場合はn
-    int lower_bound(T v)
-    {
-        int w = 1, i = 0;
-        while (w < n)
-        {
-            w <<= 1;
-        }
-        for (++w; w > 0; w >>= 1)
-        {
-            if (i + w > n)
-                continue;
-            if (data[i + w] < v)
-                v -= data[i += w];
-        }
-        return i;
-    }
-
-    // sum[0,k] > v となる最小のkを返す
-    int upper_bound(T v)
-    {
-        return lower_bound(v + 1);
-    }
-
-    // sum[0,k] >= v となる最小のkを返す
-    int min_left(T v)
-    {
-        return lower_bound(v);
-    }
-
-    // sum[0, k] <= v となる最大のkを返す
-    // 存在しない場合は-1
-    int max_right(T v)
-    {
-        return lower_bound(v + 1) - 1;
-    }
-
-    // K番目の要素を取得
-    int get_Kth_element(T k)
-    {
-        return lower_bound(k);
-    }
-
-private:
-    int n;
-    std::vector<T> data;
+template <class T, auto op, auto inv, auto e>
+concept BIT_concept = requires(const T &a, const T &b) {
+  { op(a, b) } -> std::same_as<T>;
+  { inv(a) } -> std::same_as<T>;
+  { e() } -> std::same_as<T>;
 };
 
-int main()
-{
-    int N = 10;
-    BIT<int> ft(N);
-    for (int i = 1; i < N; ++i)
-    {
-        ft.add(i);
+/**
+ * @brief 可換群上の fenwick_tree
+ */
+template <class T, auto op, auto inv, auto e>
+  requires BIT_concept<T, op, inv, e>
+class BIT {
+  int n;
+  std::vector<T> data;
+
+public:
+  BIT(int n_) : n(n_), data(std::vector<T>(n_ + 1, e())) {}
+  BIT(const std::vector<T> &vec) : n(vec.size()), data(std::vector<T>(vec.size() + 1, e())) {
+    for (int i = 1; i <= n; ++i) {
+      data[i] = op(data[i], vec[i - 1]);
+      int j = i + (i & -i);
+      if (j <= n) {
+        data[j] = op(data[j], data[i]);
+      }
     }
-    for (int i = 1; i <= N; ++i)
-    {
-        std::cout << ft.sum(i) << ' ';
+  }
+
+  T prefix_sum(int r) const {
+    assert(0 <= r && r <= n);
+    T res = e();
+    for (; r > 0; r -= (r & -r)) {
+      res = op(data[r], res);
     }
-    std::cout << std::endl;
-    for (int i = 0; i < N * N; ++i)
-    {
-        std::cout << ft.lower_bound(i) << ' ';
+    return res;
+  }
+
+  T sum(int l, int r) const {
+    assert(0 <= l && l <= r && r <= n);
+    return op(inv(prefix_sum(l)), prefix_sum(r));
+  }
+
+  T get(int p) const {
+    assert(0 <= p && p < n);
+    return sum(p, p + 1);
+  }
+
+  void add(int p, const T &x) {
+    assert(0 <= p && p < n);
+    for (++p; p <= n; p += (p & -p)) {
+      data[p] = op(data[p], x);
     }
-    std::cout << std::endl;
-    BIT<int> ft2(N);
-    ft2.add(0, 1);
-    ft2.add(1, 1);
-    ft2.add(2, 2);
-    ft2.add(3, 2);
-    ft2.add(4, 3);
-    ft2.add(5, 0);
-    ft2.add(6, 2);
-    ft2.add(7, 2);
-    vector<int> A = {0, 1, 2, 2, 3, 3, 4, 4, 4, 6, 6, 7, 7};
-    for (int a : A)
-    {
-        std::cout << a << ' ';
+  }
+
+  void set(int p, const T &x) {
+    assert(0 <= p && p < n);
+    T prev = get(p);
+    add(p, op(inv(prev), x));
+  }
+
+  /**
+   * @brief `f(prefix_sum(r)) == true` となる最大の r (0 <= r <= n) を返す
+   * @pre rに関してf(prefix_sum(r))は true -> false の単調性を持つ
+   * @pre f(e()) == true
+   */
+  template <class F> int max_right(F f) const {
+    assert(f(e()));
+    int res = 0;
+    T val = e();
+    for (int k = std::bit_floor(static_cast<unsigned>(n)); k > 0; k >>= 1) {
+      if (k + res <= n) {
+        T nxt = op(val, data[k + res]);
+        if (f(nxt)) {
+          val = std::move(nxt);
+          res += k;
+        }
+      }
     }
-    std::cout << std::endl;
-    std::cout << "sum" << std::endl;
-    for (int k = 0; k <= 13; ++k)
-    {
-        std::cout << ft2.sum(k + 1) << ' ';
-    }
-    std::cout << std::endl;
-    std::cout << "upper_bound" << std::endl;
-    for (int k = 0; k <= 13; ++k)
-    {
-        std::cout << ft2.upper_bound(k) << ' ';
-    }
-    std::cout << std::endl;
-    std::cout << "lower_bound" << std::endl;
-    for (int k = 0; k <= 13; ++k)
-    {
-        std::cout << ft2.lower_bound(k) << ' ';
-    }
-    std::cout << std::endl;
-    std::cout << "max_right" << std::endl;
-    for (int k = 0; k <= 13; ++k)
-    {
-        std::cout << ft2.max_right(k) << ' ';
-    }
+    return res;
+  }
+};
+
+using namespace std;
+
+using S = int;
+
+S op(S a, S b) {
+  return a + b;
+}
+
+S inv(S a) {
+  return -a;
+}
+
+S e() {
+  return 0;
+}
+
+int main() {
+  vector<int> vec = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+  BIT<S, op, inv, e> bit(vec);
+  bit.add(1, 4);
+  cout << bit.get(1) << endl;
+  cout << bit.sum(0, 10) << endl;
+  cout << bit.max_right([&](S s) {
+    return s <= 6;
+  }) << endl;
+  cout << bit.max_right([&](S s) {
+    return s <= 100;
+  }) << endl;
 }

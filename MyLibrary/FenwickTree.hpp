@@ -1,114 +1,83 @@
-/*
-Fenwick Tree (BIT)
+#include <bits/stdc++.h>
 
-N要素の数列Aについて
-基本機能:
-    一点加算 O(logN)
-    区間和取得 O(logN)
-追加機能:
-    prefix_sumの二分探索 O(logN)
-    定義域[0,N-1]の整数を要素とする，順序付き多重集合におけるK番目(K >= 1)の要素取得 O(logN)
+template <class T, auto op, auto inv, auto e>
+concept BIT_concept = requires(const T &a, const T &b) {
+  { op(a, b) } -> std::same_as<T>;
+  { inv(a) } -> std::same_as<T>;
+  { e() } -> std::same_as<T>;
+};
 
+/**
+ * @brief 可換群上の fenwick_tree
+ */
+template <class T, auto op, auto inv, auto e>
+  requires BIT_concept<T, op, inv, e>
+class BIT {
+  int n;
+  std::vector<T> data;
 
-functions:
-    add(pos:int, value:T) -> void : A[pos] に value を加算
-    prefix_sum(r:int) -> T : 数列Aの [0, r) の区間和を取得
-    sum(l:int, r:int) -> T : 数列Aの [l, r) の区間和を取得
+public:
+  BIT(int n_) : n(n_), data(std::vector<T>(n_ + 1, e())) {}
+  BIT(const std::vector<T> &vec) : n(vec.size()), data(std::vector<T>(vec.size() + 1, e())) {
+    for (int i = 1; i <= n; ++i) {
+      data[i] = op(data[i], vec[i - 1]);
+      int j = i + (i & -i);
+      if (j <= n) {
+        data[j] = op(data[j], data[i]);
+      }
+    }
+  }
 
-    数列Aの区間 [0, k] の区間和を A[0, k] とする
-    lower_bound(value:T) -> int : A[0, k] >= value を満たす最小のkを取得
-    upper_bound(value:T) -> int : A[0, k] >  value を満たす最小のkを取得
-    min_left(value:T) -> int    : A[0, k] >= value を満たす最小のkを取得
-    max_right(value:T) -> int   : A[0, k] >= value を満たす最大のkを取得
+  T prefix_sum(int r) const {
+    assert(0 <= r && r <= n);
+    T res = e();
+    for (; r > 0; r -= (r & -r)) {
+      res = op(data[r], res);
+    }
+    return res;
+  }
 
-    定義域[0,N-1]の整数を要素とする，順序付き多重集合Sを考える
-    A[i] : Sにおける要素iの個数
-    get_Kth_element(k:T) -> int : Sのk番目(k >= 1)の要素の取得
+  T sum(int l, int r) const {
+    assert(0 <= l && l <= r && r <= n);
+    return op(inv(prefix_sum(l)), prefix_sum(r));
+  }
 
-補足:
-    upper_boundがlower_boundにより実装されているため，
-    整数値のデータ型に対する二分探索のみを想定
-    (lower_boundを経由しないupper_boundの実装がわからなかった)
-*/
+  T get(int p) const {
+    assert(0 <= p && p < n);
+    return sum(p, p + 1);
+  }
 
-#include <vector>
+  void add(int p, const T &x) {
+    assert(0 <= p && p < n);
+    for (++p; p <= n; p += (p & -p)) {
+      data[p] = op(data[p], x);
+    }
+  }
 
-template <class T>
-struct BIT
-{
-    BIT(int n_) : n(n_), data(n_ + 1) {}
+  void set(int p, const T &x) {
+    assert(0 <= p && p < n);
+    T prev = get(p);
+    add(p, op(inv(prev), x));
+  }
 
-    void add(int p, T x = 1)
-    {
-        for (++p; p <= n; p += p & -p)
-        {
-            data[p] += x;
+  /**
+   * @brief `f(prefix_sum(r)) == true` となる最大の r (0 <= r <= n) を返す
+   * @pre rに関してf(prefix_sum(r))は true -> false の単調性を持つ
+   * @pre f(e()) == true
+   */
+  template <class F> int max_right(F f) const {
+    assert(f(e()));
+    int res = 0;
+    T val = e();
+    for (int k = std::bit_floor(static_cast<unsigned>(n)); k > 0; k >>= 1) {
+      if (k + res <= n) {
+        T nxt = op(val, data[k + res]);
+        if (f(nxt)) {
+          val = std::move(nxt);
+          res += k;
         }
+      }
     }
-
-    // [0, p)
-    T prefix_sum(int p)
-    {
-        T res = 0;
-        for (; p > 0; p -= p & -p)
-        {
-            res += data[p];
-        }
-        return res;
-    }
-
-    // [l, r)
-    T sum(int l, int r)
-    {
-        return prefix_sum(r) - prefix_sum(l);
-    }
-
-    // binary_search
-    // sum[0,k] >= v となる最小のkを返す
-    // 存在しない場合はn
-    int lower_bound(T v)
-    {
-        int w = 1, i = 0;
-        while (w < n)
-        {
-            w <<= 1;
-        }
-        for (++w; w > 0; w >>= 1)
-        {
-            if (i + w > n)
-                continue;
-            if (data[i + w] < v)
-                v -= data[i += w];
-        }
-        return i;
-    }
-
-    // sum[0,k] > v となる最小のkを返す
-    int upper_bound(T v)
-    {
-        return lower_bound(v + 1);
-    }
-
-    // sum[0,k] >= v となる最小のkを返す
-    int min_left(T v)
-    {
-        return lower_bound(v);
-    }
-
-    // sum[0, k] <= v となる最大のkを返す
-    // 存在しない場合は-1
-    int max_right(T v)
-    {
-        return lower_bound(v + 1) - 1;
-    }
-
-    // K番目の要素を取得
-    int get_Kth_element(T k)
-    {
-        return lower_bound(k);
-    }
-
-private:
-    int n;
-    std::vector<T> data;
+    return res;
+  }
 };
