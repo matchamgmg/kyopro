@@ -5,5 +5,12 @@
     },
     "containerEnv": {
         "ACL_PATH": "/opt/ac-library"
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-vscode.cpptools"
+            ]
+        }
     }
 }
