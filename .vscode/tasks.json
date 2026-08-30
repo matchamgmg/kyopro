@@ -12,7 +12,7 @@
                 "-o",
                 "out",
                 "-I",
-                "{env:ACL_PATH}"
+                "${env:ACL_PATH}"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
