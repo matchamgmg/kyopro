@@ -12,3 +12,5 @@ RUN DEBIAN_FRONTED=noninteractive apt-get update && \
 RUN git clone --depth 1 \
     https://github.com/atcoder/ac-library.git \
     /opt/ac-library
+
+RUN echo 'add-auto-load-safe-path /usr/local/lib64' > /root/.gdbinit
