@@ -65,20 +65,25 @@ void solve() {
   vector<ll> A(K + 1);
   ll under_K_cnt = 0;
   ll sum = 0;
+  ll minA = 2e9;
   rep(i, 0, K + 1) {
     cin >> A[i];
-    sum += A[i];
-    under_K_cnt += (A[i] < K);
+    chmin(minA, A[i]);
   }
-  if (under_K_cnt > 0) {
-    cout << "Alice" << endl;
+  ll d = minA / K;
+  ll KK = d * K;
+  rep(i, 0, K + 1) {
+    A[i] -= KK;
+  }
+  rep(i, 0, K + 1) {
+    under_K_cnt += (A[i] == 0);
+    sum += A[i];
+  }
+  if (under_K_cnt == K + 1 || sum < K) {
+    cout << "Bob" << endl;
     return;
   }
-  if (sum >= (K + 1) * K + K) {
-    cout << "Alice" << endl;
-  } else {
-    cout << "Bob" << endl;
-  }
+  cout << "Alice" << endl;
 }
 
 int main() {
