@@ -65,31 +65,38 @@ int main() {
 
   int X;
   cin >> X;
-  if (X == 0) {
-    cout << "A" << endl;
-    return 0;
+
+  string A, C, R;
+  rep(i, 0, 25) {
+    A += "A";
+    C += "C";
+    R += "R";
   }
-  string ans = "";
-  while (X > 0) {
-    int siz = 0;
-    while ((siz + 1) * (siz + 1) <= X) {
-      siz++;
+  R += R;
+  R.pop_back();
+  A += C;
+
+  int cnt = 625 - X;
+  rep(i, 1, 50) {
+    if (!(A[i] == 'C' && A[i - 1] == 'A')) {
+      continue;
     }
-    int siz2 = siz;
-    while (siz * (siz2 + 1) <= X) {
-      siz2++;
+    int j = i;
+    while (cnt > 0 && j >= 1 && A[j] == 'C' && A[j - 1] == 'A') {
+      swap(A[j], A[j - 1]);
+      cnt--;
+      j--;
     }
-    string head, tail;
-    rep(i, 0, siz) {
-      head += "AR";
+    if (cnt == 0) {
+      break;
     }
-    rep(i, 0, siz2) {
-      tail += "RC";
+  }
+  string ans;
+  rep(i, 0, 50) {
+    ans += A[i];
+    if (i < 49) {
+      ans += R[i];
     }
-    head.pop_back();
-    ans += head;
-    ans += tail;
-    X -= (siz * siz2);
   }
   cout << ans << endl;
 }
