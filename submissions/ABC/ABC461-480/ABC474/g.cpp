@@ -59,7 +59,84 @@ template <class T> bool chmin(T &a, T b) {
   }
 }
 
+void solve() {
+  int N, K;
+  cin >> N >> K;
+  if (N % 2 == 0) {
+    cout << "No" << endl;
+    return;
+  }
+  ll max_K = (N * N - 1) / 2;
+  ll min_K = N - 1;
+  if (!(min_K <= K && K <= max_K)) {
+    cout << "No" << endl;
+    return;
+  }
+  if (K % 2 == 1) {
+    cout << "No" << endl;
+    return;
+  }
+  cout << "Yes" << endl;
+  ll req = (max_K - K) / 2;
+  vector<vector<char>> S(N, vector<char>(N, '.'));
+  rep(i, 0, N) {
+    rep(j, 0, N) {
+      if ((i % 2 == 0 && j == N - 1) || (i % 2 == 1 && j == 0)) {
+        S[i][j] = 'D';
+      } else if (i % 2 == 0) {
+        S[i][j] = 'R';
+      } else {
+        S[i][j] = 'L';
+      }
+    }
+  }
+  int x = 0;
+  int y = 0;
+  vector<vector<char>> T = {{'D', 'R', 'R'}, {'D', 'U', 'D'}, {'R', 'U', 'R'}};
+  rep(c, 0, req) {
+    rep(i, 0, 3) {
+      rep(j, 0, 3) {
+        S[i + x][j + y] = T[i][j];
+      }
+    }
+    if (x != 0) {
+      S[x][y + 1] = 'U';
+    }
+    if (y == N - 3) {
+      S[x][y + 2] = 'D';
+      S[x + 2][y + 2] = 'D';
+    }
+    x += 2;
+    if (x + 2 >= N) {
+      x = 0;
+      y += 2;
+    }
+  }
+
+  // vv_cout(S);
+
+  x = 0, y = 0;
+  rep(i, 0, N * N - 1) {
+    cout << S[x][y];
+    if (S[x][y] == 'L') {
+      y--;
+    } else if (S[x][y] == 'R') {
+      y++;
+    } else if (S[x][y] == 'U') {
+      x--;
+    } else if (S[x][y] == 'D') {
+      x++;
+    }
+  }
+  cout << endl;
+}
+
 int main() {
   ios::sync_with_stdio(false);
   cin.tie(nullptr);
+
+  int T;
+  cin >> T;
+  while (T--)
+    solve();
 }

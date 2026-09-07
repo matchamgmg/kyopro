@@ -60,7 +60,7 @@ template <class T> bool chmin(T &a, T b) {
 }
 
 void solve() {
-  int N;
+  ll N;
   cin >> N;
   vector<ll> A(N), B(N);
   rep(i, 0, N) {
@@ -70,24 +70,22 @@ void solve() {
   rep(i, 0, N) {
     C[i] = A[i] - B[i];
   }
+  ll cost = *min_element(all(A));
   vector<int> idx(N);
   iota(all(idx), 0);
   sort(all(idx), [&](int i, int j) {
     return C[i] > C[j];
   });
-  int M = N / 2;
-  ll ans = 0;
-  rep(i, 0, M) {
-    ans += B[idx[i]];
+  vector<ll> SA(N + 1, 0), SB(N + 1, 0);
+  rep(i, 0, N) {
+    SA[i + 1] = SA[i] + A[idx[i]];
+    SB[i + 1] = SB[i] + B[idx[i]];
   }
-  rep(i, M, N) {
-    ans += A[idx[i]];
-  }
-  ll cost = *min_element(all(A));
-  rep(i, M, N) {
-    if (cost < C[idx[i]]) {
-      ans += cost - C[idx[i]];
-    }
+  ll ans = 1e18;
+  rep(k, 0, N + 1) {
+    ll val = SB[k] + SA[N] - SA[k];
+    val += max(0LL, 2 * k - N) * cost;
+    chmin(ans, val);
   }
   cout << ans << endl;
 }
