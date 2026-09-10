@@ -150,6 +150,16 @@ public:
   }
 };
 
+int op(int a, int b) {
+  return a + b;
+}
+int inv(int a) {
+  return -a;
+}
+int e() {
+  return 0;
+}
+
 int main() {
   ios::sync_with_stdio(false);
   cin.tie(nullptr);
@@ -159,6 +169,28 @@ int main() {
   vector<int> L(N), R(N);
   rep(i, 0, N) {
     cin >> L[i] >> R[i];
-    R[i] += L[i];
+  }
+  vector<int> idx(N);
+  iota(all(idx), 0);
+  sort(all(idx), [&](int i, int j) {
+    return R[i] - L[i] < R[j] - L[j];
+  });
+
+  BIT<int, op, inv, e> ft(M + 2);
+
+  int wide = N;
+  int i = 0;
+  rep(d, 1, M + 1) {
+    while (i < N && R[idx[i]] - L[idx[i]] + 1 < d) {
+      ft.add(L[idx[i]], 1);
+      ft.add(R[idx[i]] + 1, -1);
+      ++i;
+      --wide;
+    }
+    int ans = 0;
+    for (int j = d; j <= M; j += d) {
+      ans += ft.prefix_sum(j + 1);
+    }
+    cout << ans + wide << endl;
   }
 }
