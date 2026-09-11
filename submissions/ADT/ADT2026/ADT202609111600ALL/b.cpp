@@ -62,4 +62,13 @@ template <class T> bool chmin(T &a, T b) {
 int main() {
   ios::sync_with_stdio(false);
   cin.tie(nullptr);
+
+  string S;
+  cin >> S;
+  int N = S.size();
+  bool ok = true;
+  rep(i, 0, N - 1) {
+    ok &= (S[i] > S[i + 1]);
+  }
+  YN(ok);
 }
