@@ -926,10 +926,11 @@ int main() {
     tp.erase(S[i]);
     S[i][j] = (S[i][j] == '0' ? '1' : '0');
     tp.insert(S[i]);
-    int k = tp.index(S[i]);
-    if (k < M) {
-      cout << "Yes" << endl;
-    } else {
+    int k = tp.order_of_upper_bound(S[i]);
+    bool success = false;
+    rep(l, 0, K) {
+      success |= (S[i][l] == '0');
     }
+    YN(k <= M && success);
   }
 }
