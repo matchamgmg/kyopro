@@ -103,23 +103,31 @@ struct Leagal_action {
 
 struct Beam_state {
   int cost;
+  int bricks;
   vector<pair<int, int>> first_action;
   vector<int> holes;
-  bool operator>(const Beam_state &rhs) const {
-    if (cost == rhs.cost) {
-      return holes.size() > rhs.holes.size();
-    } else {
-      return cost > rhs.cost;
-    }
-  }
   bool operator<(const Beam_state &rhs) const {
-    if (cost == rhs.cost) {
-      return holes.size() < rhs.holes.size();
-    } else {
+    // if (holes.size() == rhs.holes.size()) {
+    //   return cost < rhs.cost;
+    // } else {
+    //   return holes.size() < rhs.holes.size();
+    // }
+    // if (cost == rhs.cost) {
+    //   return holes.size() < rhs.holes.size();
+    // } else {
+    //   return cost < rhs.cost;
+    // }
+    if (bricks == rhs.bricks) {
       return cost < rhs.cost;
+    } else {
+      return bricks < rhs.bricks;
     }
   }
 };
+
+pair<int, int> operator+(const pair<int, int> &a, const pair<int, int> &b) {
+  return {a.first + b.first, a.second + b.second};
+}
 
 struct Solver {
   Problem P;
@@ -234,17 +242,252 @@ struct Solver {
     return Leagal_action(cost, std::move(action));
   }
 
-  Leagal_action get_leagal_beam_action(const Frontier &f, int y, int Loop = 300, int width = 50, int depth = 10) {
+  // コスト最小のブロック配置を求める
+  Leagal_action get_dp_action(const Frontier &f) {
+    vector<int> holes(P.W + 1, 0);
+    for (int hole_pos : f.Holes) {
+      holes[hole_pos + 1]++;
+    }
+    for (int i = 0; i < P.W; ++i) {
+      holes[i + 1] += holes[i];
+    }
+    vector<pair<int, pair<int, int>>> dp(P.W + 1, {INF, pair<int, int>(-1, -1)});
+    dp[0].first = 0;
+    for (int i = 0; i < P.W; ++i) {
+      if (holes[i + 1] - holes[i] == 0) {
+        dp[i + 1].first = min(dp[i + 1].first, dp[i].first);
+      }
+      for (int half = 0; half < 5; ++half) {
+        int len = half * 2 + 1;
+        if (i - len + 1 >= 0) {
+          if (holes[i + 1] - holes[i + 1 - len] > 0 && dp[i + 1].first >= dp[i - len + 1].first + P.C[half]) {
+            dp[i + 1].first = dp[i - len + 1].first + P.C[half];
+            dp[i + 1].second = {i - len + 2, len};
+          }
+        }
+      }
+    }
+    int cost = 0;
+    vector<pair<int, int>> action;
+    int i = P.W;
+    while (i > 0) {
+      if (dp[i].second.first == -1) {
+        --i;
+      } else {
+        action.emplace_back(dp[i].second.first - 1, dp[i].second.second);
+        cost += P.C[dp[i].second.second / 2];
+        i = dp[i].second.first - 1;
+      }
+    }
+    return Leagal_action(cost, std::move(action));
+  }
+
+  // ブロック数最小のブロック配置を求める
+  Leagal_action get_dp2_action(const Frontier &f) {
+    vector<int> holes(P.W + 1, 0);
+    for (int hole_pos : f.Holes) {
+      holes[hole_pos + 1]++;
+    }
+    for (int i = 0; i < P.W; ++i) {
+      holes[i + 1] += holes[i];
+    }
+    vector<pair<int, pair<int, int>>> dp(P.W + 1, {INF, pair<int, int>(-1, -1)});
+    dp[0].first = 0;
+    for (int i = 0; i < P.W; ++i) {
+      if (holes[i + 1] - holes[i] == 0) {
+        dp[i + 1].first = min(dp[i + 1].first, dp[i].first);
+      }
+      for (int half = 0; half < 5; ++half) {
+        int len = half * 2 + 1;
+        if (i - len + 1 >= 0) {
+          if (holes[i + 1] - holes[i + 1 - len] > 0 && dp[i + 1].first >= dp[i - len + 1].first + 1) {
+            dp[i + 1].first = dp[i - len + 1].first + 1;
+            dp[i + 1].second = {i - len + 2, len};
+          }
+        }
+      }
+    }
+    int cost = 0;
+    vector<pair<int, int>> action;
+    int i = P.W;
+    while (i > 0) {
+      if (dp[i].second.first == -1) {
+        --i;
+      } else {
+        action.emplace_back(dp[i].second.first - 1, dp[i].second.second);
+        cost += P.C[dp[i].second.second / 2];
+        i = dp[i].second.first - 1;
+      }
+    }
+    return Leagal_action(cost, std::move(action));
+  }
+
+  // ブロック数最小かつその中でコスト最小のブロック配置を求める
+  Leagal_action get_dp3_action(const Frontier &f) {
+
+    vector<int> holes(P.W + 1, 0);
+    for (int hole_pos : f.Holes) {
+      holes[hole_pos + 1]++;
+    }
+    for (int i = 0; i < P.W; ++i) {
+      holes[i + 1] += holes[i];
+    }
+    vector<pair<pair<int, int>, pair<int, int>>> dp(P.W + 1, {{INF, INF}, pair<int, int>(-1, -1)});
+    dp[0].first = {0, 0};
+    for (int i = 0; i < P.W; ++i) {
+      if (holes[i + 1] - holes[i] == 0) {
+        dp[i + 1].first = min(dp[i + 1].first, dp[i].first);
+      }
+      for (int half = 0; half < 5; ++half) {
+        int len = half * 2 + 1;
+        if (i - len + 1 >= 0) {
+          if (holes[i + 1] - holes[i + 1 - len] > 0 &&
+              dp[i + 1].first >= dp[i - len + 1].first + make_pair(1, P.C[half])) {
+            dp[i + 1].first = dp[i - len + 1].first + make_pair(1, P.C[half]);
+            dp[i + 1].second = {i - len + 2, len};
+          }
+        }
+      }
+    }
+    int cost = 0;
+    vector<pair<int, int>> action;
+    int i = P.W;
+    while (i > 0) {
+      if (dp[i].second.first == -1) {
+        --i;
+      } else {
+        action.emplace_back(dp[i].second.first - 1, dp[i].second.second);
+        cost += P.C[dp[i].second.second / 2];
+        i = dp[i].second.first - 1;
+      }
+    }
+    return Leagal_action(cost, std::move(action));
+  }
+
+  Answer dp() {
+    Answer ans;
+    ans.cost = 0;
+    ans.bricks = 0;
+    int y = 39;
+    Frontier f = get_frontier(y);
+    Leagal_action a;
+    for (; y > 0; --y) {
+      a = get_dp3_action(f);
+      for (auto &[x, l] : a.x_l) {
+        ans.actions.emplace_back(x, y, l);
+      }
+      ans.cost += a.cost;
+      ans.bricks += a.x_l.size();
+      f = get_frontier(a, y - 1);
+    }
+    a = get_dp3_action(f);
+    for (auto &[x, l] : a.x_l) {
+      ans.actions.emplace_back(x, y, l);
+    }
+    ans.cost += a.cost;
+    ans.bricks += a.x_l.size();
+    return ans;
+  }
+
+  Leagal_action get_dp_near_action(const Leagal_action &dp, const Frontier &f) {
+    int n = dp.x_l.size();
+    if (n == 0) {
+      return dp;
+    }
+    Leagal_action action = dp;
+    vector<int> a(P.W + 1, 0);
+    int r = mt() % n;
+    int d = mt() % 5;
+    int l = mt() % 5;
+    action.cost += P.C[l] - P.C[action.x_l[r].second / 2];
+    action.x_l[r] = {min(max(0, action.x_l[r].first + d - 2), P.W - l * 2 - 1), l * 2 + 1};
+    for (auto &[x_, l_] : action.x_l) {
+      a[x_]++;
+      a[x_ + l_]--;
+    }
+    bool ok = true;
+    for (int i = 0; i < P.W; ++i) {
+      a[i + 1] += a[i];
+    }
+    for (int i = 0; i < P.W + 1; ++i) {
+      ok &= (a[i] <= 1);
+    }
+    for (int hole_pos : f.Holes) {
+      ok &= (a[hole_pos] >= 1);
+    }
+    if (ok) {
+      return action;
+    } else {
+      return dp;
+    }
+  }
+
+  Leagal_action get_dp_near2_action(const Leagal_action &dp, const Frontier &f) {
+    int n = dp.x_l.size();
+    if (n <= 1) {
+      return dp;
+    }
+    Leagal_action action = dp;
+    vector<int> a(P.W + 1, 0);
+    int r1 = mt() % n;
+    int d1 = mt() % 5;
+    int l1 = mt() % 5;
+    int r2;
+    int d2;
+    int l2;
+    do {
+      r2 = mt() % n;
+      d2 = mt() % 5;
+      l2 = mt() % 5;
+    } while (r1 == r2);
+    action.cost += P.C[l1] - P.C[action.x_l[r1].second / 2];
+    action.x_l[r1] = {min(max(0, action.x_l[r1].first + d1 - 2), P.W - l1 * 2 - 1), l1 * 2 + 1};
+    action.cost += P.C[l2] - P.C[action.x_l[r2].second / 2];
+    action.x_l[r2] = {min(max(0, action.x_l[r2].first + d2 - 2), P.W - l2 * 2 - 1), l2 * 2 + 1};
+    for (auto &[x_, l_] : action.x_l) {
+      a[x_]++;
+      a[x_ + l_]--;
+    }
+    bool ok = true;
+    for (int i = 0; i < P.W; ++i) {
+      a[i + 1] += a[i];
+    }
+    for (int i = 0; i < P.W + 1; ++i) {
+      ok &= (a[i] <= 1);
+    }
+    for (int hole_pos : f.Holes) {
+      ok &= (a[hole_pos] >= 1);
+    }
+    if (ok) {
+      return action;
+    } else {
+      return dp;
+    }
+  }
+
+  Leagal_action get_leagal_beam_action(const Frontier &f, int y, int Loop = 160, int width = 50, int depth = 10) {
     depth = min(depth, y + 1);
     pq<Beam_state> que;
     int dep = 0;
     Beam_state state;
     Leagal_action action;
+    Leagal_action dp_action;
     Frontier frontier;
-    for (int t = 0; t < Loop; ++t) {
-      action = get_random_action(f);
+    {
+      dp_action = get_dp3_action(f);
+      frontier = get_frontier(dp_action, y - 1);
+      que.emplace(dp_action.cost, dp_action.x_l.size(), dp_action.x_l, frontier.Holes);
+    }
+    for (int t = 1; t < Loop; ++t) {
+      action = get_dp_near_action(dp_action, f);
       frontier = get_frontier(action, y - 1);
-      que.emplace(action.cost, action.x_l, frontier.Holes);
+      que.emplace(action.cost, action.x_l.size(), action.x_l, frontier.Holes);
+      if (que.size() > width) {
+        que.pop();
+      }
+      action = get_dp_near2_action(dp_action, f);
+      frontier = get_frontier(action, y - 1);
+      que.emplace(action.cost, action.x_l.size(), action.x_l, frontier.Holes);
       if (que.size() > width) {
         que.pop();
       }
@@ -256,12 +499,23 @@ struct Solver {
         if (que.empty()) {
           break;
         }
-        auto [c, x_l, fron] = que.top();
+        auto [c, b, x_l, fron] = que.top();
         que.pop();
-        for (int t = 0; t < Loop; ++t) {
-          action = get_random_action(Frontier(y - dep, fron));
+        {
+          dp_action = get_dp3_action(Frontier(y - dep, fron));
+          frontier = get_frontier(dp_action, y - 1 - dep);
+          next_que.emplace(c + dp_action.cost, b + dp_action.x_l.size(), x_l, frontier.Holes);
+        }
+        for (int t = 1; t < Loop; ++t) {
+          action = get_dp_near_action(dp_action, Frontier(y - dep, fron));
           frontier = get_frontier(action, y - 1 - dep);
-          next_que.emplace(c + action.cost, x_l, frontier.Holes);
+          next_que.emplace(c + action.cost, b + action.x_l.size(), x_l, frontier.Holes);
+          if (next_que.size() > width) {
+            next_que.pop();
+          }
+          action = get_dp_near2_action(dp_action, Frontier(y - dep, fron));
+          frontier = get_frontier(action, y - 1 - dep);
+          next_que.emplace(c + action.cost, b + action.x_l.size(), x_l, frontier.Holes);
           if (next_que.size() > width) {
             next_que.pop();
           }
@@ -273,7 +527,7 @@ struct Solver {
     while (que.size() > 1) {
       que.pop();
     }
-    auto [c, x_l, fron] = que.top();
+    auto [c, b, x_l, fron] = que.top();
     int cost = 0;
     for (auto &[_, l] : x_l) {
       cost += P.C[l / 2];
