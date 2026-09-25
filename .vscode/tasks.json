@@ -25,6 +25,22 @@
                 "isDefault": true
             },
             "detail": "デバッガーによって生成されたタスク。"
+        },
+        {
+            "type": "shell",
+            "label": "C/C++: g++ 出力確認用",
+            "command": "./out > ${fileDirname}/${fileBasenameNoExtension}.txt",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "dependsOn": [
+                "C/C++: g++ アクティブなファイルのビルド"
+            ],
+            "problemMatcher": [],
+            "group": {
+                "kind": "build"
+            },
+            
         }
     ],
     "version": "2.0.0"
