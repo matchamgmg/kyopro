@@ -1,0 +1,6 @@
+small mixed prefix: 162 actions, normal=162, recovery=0, recovery_calls=0
+fill8/flush7: best=285, current=285(insert=10), mixed=288, trials=36, mixed_wins=28
+fill8/flush6: best=285, current=285(insert=7), mixed=287, trials=36, mixed_wins=25
+fill8/flush5: best=283, current=283(insert=9), mixed=286, trials=35, mixed_wins=23
+fill8/flush4: best=282, current=282(insert=4), mixed=290, trials=35, mixed_wins=12
+total trials=142

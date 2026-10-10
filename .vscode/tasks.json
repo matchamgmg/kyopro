@@ -29,7 +29,7 @@
         {
             "type": "shell",
             "label": "C/C++: g++ 出力確認用",
-            "command": "./out > ${fileDirname}/${fileBasenameNoExtension}.txt",
+            "command": "./out > ${fileDirname}/${fileBasenameNoExtension}.txt 2> ${fileDirname}/${fileBasenameNoExtension}_err.txt",
             "options": {
                 "cwd": "${workspaceFolder}"
             },

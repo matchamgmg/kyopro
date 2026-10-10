@@ -1,0 +1,31 @@
+initial lookahead_baseline=160 build_ms=3 first_keep=20 setup_keep=8 alpha=1/4
+sa baseline=160
+sa best=159 current=159 trial=1 delta=-1 temp=2.177 type=1 span=14 uses=1 mode=direct
+sa best=156 current=156 trial=5 delta=-3 temp=2.146 type=1 span=24 uses=1 mode=beam
+sa best=152 current=152 trial=96 delta=-4 temp=2.123 type=1 span=12 uses=1 mode=beam
+sa best=145 current=145 trial=118 delta=-7 temp=2.105 type=1 span=41 uses=2 mode=deep
+sa best=144 current=144 trial=267 delta=-1 temp=2.017 type=1 span=6 uses=1 mode=beam
+sa best=143 current=143 trial=361 delta=-1 temp=1.996 type=1 span=2 uses=1 mode=direct
+sa best=142 current=142 trial=506 delta=-2 temp=1.926 type=0 span=33 uses=3 mode=deep
+sa best=140 current=140 trial=768 delta=-2 temp=1.823 type=1 span=23 uses=1 mode=deep
+sa best=139 current=139 trial=1075 delta=-1 temp=1.735 type=0 span=23 uses=2 mode=deep
+sa best=138 current=138 trial=1191 delta=-1 temp=1.714 type=1 span=15 uses=1 mode=deep
+sa best=137 current=137 trial=1244 delta=-1 temp=1.701 type=0 span=26 uses=1 mode=deep
+sa best=136 current=136 trial=1454 delta=-1 temp=1.616 type=0 span=28 uses=1 mode=deep
+sa best=132 current=132 trial=1489 delta=-4 temp=1.605 type=0 span=32 uses=3 mode=deep
+sa best=130 current=130 trial=1532 delta=-2 temp=1.577 type=1 span=7 uses=2 mode=beam
+sa best=129 current=129 trial=1551 delta=-1 temp=1.571 type=1 span=1 uses=1 mode=direct
+sa best=128 current=128 trial=1560 delta=-1 temp=1.565 type=0 span=21 uses=1 mode=beam
+sa best=127 current=127 trial=1862 delta=-1 temp=1.466 type=2 span=37 uses=1 mode=deep
+sa best=123 current=123 trial=1864 delta=-4 temp=1.466 type=1 span=21 uses=1 mode=direct
+sa best=122 current=122 trial=1957 delta=-1 temp=1.430 type=0 span=9 uses=2 mode=direct
+sa best=120 current=120 trial=2140 delta=-2 temp=1.351 type=0 span=22 uses=1 mode=beam
+sa best=119 current=119 trial=4460 delta=-1 temp=0.820 type=0 span=10 uses=2 mode=deep
+sa best=117 current=117 trial=5586 delta=-2 temp=0.599 type=0 span=44 uses=1 mode=deep
+sa best=116 current=116 trial=6755 delta=-1 temp=0.465 type=0 span=8 uses=1 mode=deep
+sa best=114 current=114 trial=7171 delta=-2 temp=0.411 type=1 span=12 uses=2 mode=beam
+sa best=113 current=113 trial=7175 delta=-1 temp=0.411 type=0 span=4 uses=1 mode=direct
+sa best=112 current=112 trial=7837 delta=-1 temp=0.342 type=1 span=1 uses=1 mode=direct
+sa best=110 current=110 trial=8160 delta=-2 temp=0.320 type=2 span=21 uses=1 mode=beam
+sa best=109 current=109 trial=10499 delta=-1 temp=0.186 type=0 span=4 uses=1 mode=beam
+sa final=109 current=109 elapsed_ms=1870 trials=14147 direct_trials=12725 beam_trials=1422 valid=219 accepted=189 improve=32 neutral=152 uphill=5 beam_deep=279 refresh=190 rebuild_reject=0 generated_total=84478 direct_pool_total=1887 beam_pool_total=84478 prefilter_direct=1887 prefilter_reject=82591 direct_valid=19 direct_event_fail=0 direct_use_fail=9781 direct_rejoin_fail=2925 direct_steps=180083 reroutes=710 beam_valid=200 beam_states=410430 raw=9589239 children=425921 rejoins=219

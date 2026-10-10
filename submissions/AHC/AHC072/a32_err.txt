@@ -1,0 +1,20 @@
+initial lookahead_baseline=241 build_ms=27 first_keep=20 setup_keep=8 alpha=1/4
+sa baseline=241
+sa best=240 current=240 trial=207 delta=-1 temp=1.591 type=0 span=24 uses=1 mode=beam
+sa best=237 current=237 trial=322 delta=-3 temp=1.466 type=0 span=43 uses=1 mode=beam
+sa best=235 current=235 trial=452 delta=-2 temp=1.311 type=0 span=18 uses=1 mode=beam
+sa best=232 current=232 trial=773 delta=-3 temp=0.948 type=0 span=20 uses=2 mode=deep
+sa best=221 current=221 trial=891 delta=-11 temp=0.764 type=0 span=48 uses=1 mode=deep
+sa best=220 current=220 trial=903 delta=-1 temp=0.741 type=0 span=20 uses=1 mode=beam
+sa best=213 current=213 trial=906 delta=-7 temp=0.729 type=0 span=62 uses=1 mode=deep
+sa best=212 current=212 trial=1014 delta=-2 temp=0.576 type=0 span=48 uses=1 mode=beam
+sa best=208 current=208 trial=1084 delta=-4 temp=0.520 type=0 span=23 uses=1 mode=beam
+sa best=202 current=202 trial=1173 delta=-6 temp=0.493 type=1 span=27 uses=1 mode=beam
+sa best=199 current=199 trial=1338 delta=-3 temp=0.409 type=0 span=17 uses=1 mode=beam
+sa best=190 current=190 trial=1608 delta=-9 temp=0.236 type=0 span=55 uses=2 mode=deep
+sa best=186 current=186 trial=1789 delta=-4 temp=0.175 type=1 span=37 uses=1 mode=deep
+sa best=185 current=185 trial=1810 delta=-1 temp=0.158 type=1 span=2 uses=1 mode=direct
+sa best=184 current=184 trial=2097 delta=-1 temp=0.123 type=0 span=25 uses=4 mode=beam
+sa best=183 current=183 trial=2098 delta=-1 temp=0.119 type=0 span=34 uses=2 mode=deep
+sa best=180 current=180 trial=2128 delta=-3 temp=0.114 type=2 span=34 uses=1 mode=deep
+sa final=180 current=180 elapsed_ms=1870 trials=2353 direct_trials=2128 beam_trials=225 valid=53 accepted=51 improve=17 neutral=33 uphill=1 beam_deep=41 refresh=52 rebuild_reject=0 generated_total=68431 direct_pool_total=1806 beam_pool_total=68431 prefilter_direct=1806 prefilter_reject=66625 direct_valid=5 direct_event_fail=0 direct_use_fail=736 direct_rejoin_fail=1387 direct_steps=102654 reroutes=15 beam_valid=48 beam_states=62142 raw=1985434 children=64537 rejoins=53

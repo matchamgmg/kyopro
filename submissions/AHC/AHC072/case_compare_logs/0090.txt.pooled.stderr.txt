@@ -1,0 +1,20 @@
+initial lookahead_baseline=241 build_ms=5 first_keep=20 setup_keep=8 alpha=1/4
+sa baseline=241
+sa best=240 current=240 trial=3 delta=-1 temp=2.161 type=1 span=44 uses=2 mode=direct
+sa best=239 current=239 trial=4 delta=-1 temp=2.154 type=1 span=168 uses=4 mode=direct
+sa best=233 current=233 trial=223 delta=-6 temp=1.943 type=0 span=41 uses=3 mode=deep
+sa best=232 current=232 trial=327 delta=-1 temp=1.823 type=1 span=23 uses=1 mode=beam
+sa best=227 current=227 trial=505 delta=-5 temp=1.775 type=0 span=28 uses=1 mode=deep
+sa best=222 current=222 trial=886 delta=-5 temp=1.484 type=1 span=26 uses=1 mode=beam
+sa best=221 current=221 trial=1228 delta=-1 temp=1.300 type=0 span=4 uses=1 mode=direct
+sa best=220 current=220 trial=1720 delta=-1 temp=1.114 type=1 span=1 uses=1 mode=direct
+sa best=219 current=219 trial=2818 delta=-1 temp=0.685 type=0 span=71 uses=1 mode=direct
+sa best=217 current=217 trial=3261 delta=-2 temp=0.576 type=0 span=16 uses=1 mode=beam
+sa best=216 current=216 trial=3602 delta=-1 temp=0.506 type=0 span=15 uses=1 mode=beam
+sa best=215 current=215 trial=3827 delta=-1 temp=0.453 type=1 span=10 uses=1 mode=beam
+sa best=213 current=213 trial=4218 delta=-2 temp=0.367 type=1 span=17 uses=1 mode=deep
+sa best=209 current=209 trial=5088 delta=-4 temp=0.270 type=1 span=23 uses=1 mode=deep
+sa best=201 current=201 trial=5548 delta=-8 temp=0.230 type=0 span=38 uses=1 mode=deep
+sa best=199 current=199 trial=6512 delta=-2 temp=0.155 type=0 span=12 uses=1 mode=beam
+sa best=198 current=198 trial=6911 delta=-1 temp=0.122 type=0 span=20 uses=1 mode=deep
+sa final=198 current=198 elapsed_ms=1870 trials=7743 direct_trials=6957 beam_trials=786 valid=103 accepted=90 improve=20 neutral=67 uphill=3 beam_deep=175 refresh=91 rebuild_reject=0 generated_total=96767 direct_pool_total=2508 beam_pool_total=96767 prefilter_direct=2508 prefilter_reject=94259 direct_valid=7 direct_event_fail=0 direct_use_fail=2244 direct_rejoin_fail=4706 direct_steps=438261 reroutes=2004 beam_valid=96 beam_states=250771 raw=10033188 children=259717 rejoins=103

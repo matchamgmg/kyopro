@@ -1,0 +1,5 @@
+initial lookahead_baseline=1083 build_ms=58 first_keep=20 setup_keep=8 alpha=1/4
+sa baseline=1083
+sa best=1082 current=1082 trial=27 delta=-1 temp=1.753 type=0 span=153 uses=4 mode=direct
+sa best=1081 current=1081 trial=47 delta=-1 temp=1.549 type=1 span=32 uses=2 mode=direct
+sa final=1081 current=1081 elapsed_ms=1870 trials=2106 direct_trials=1885 beam_trials=221 valid=2 accepted=2 improve=2 neutral=0 uphill=0 beam_deep=41 refresh=3 rebuild_reject=0 generated_total=24000 direct_pool_total=219 beam_pool_total=24000 prefilter_direct=219 prefilter_reject=23781 direct_valid=2 direct_event_fail=0 direct_use_fail=202 direct_rejoin_fail=1681 direct_steps=508865 reroutes=588 beam_valid=0 beam_states=70478 raw=10405686 children=72844 rejoins=2

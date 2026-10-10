@@ -1,0 +1,20 @@
+initial lookahead_baseline=112 build_ms=1 first_keep=20 setup_keep=8 alpha=1/4
+sa baseline=112
+sa best=111 current=111 trial=273 delta=-1 temp=2.097 type=0 span=24 uses=1 mode=beam
+sa best=109 current=109 trial=298 delta=-2 temp=2.079 type=0 span=22 uses=1 mode=beam
+sa best=108 current=108 trial=372 delta=-1 temp=2.068 type=0 span=18 uses=1 mode=beam
+sa best=107 current=107 trial=427 delta=-1 temp=2.053 type=0 span=30 uses=1 mode=deep
+sa best=105 current=105 trial=602 delta=-2 temp=2.010 type=0 span=6 uses=1 mode=deep
+sa best=104 current=104 trial=625 delta=-1 temp=2.006 type=0 span=16 uses=1 mode=beam
+sa best=101 current=101 trial=716 delta=-3 temp=1.989 type=0 span=38 uses=1 mode=beam
+sa best=97 current=97 trial=840 delta=-4 temp=1.964 type=0 span=33 uses=1 mode=deep
+sa best=96 current=96 trial=860 delta=-1 temp=1.957 type=1 span=5 uses=1 mode=direct
+sa best=94 current=94 trial=1060 delta=-2 temp=1.892 type=0 span=37 uses=1 mode=deep
+sa best=92 current=92 trial=1401 delta=-2 temp=1.804 type=0 span=36 uses=1 mode=deep
+sa best=91 current=91 trial=1616 delta=-3 temp=1.747 type=0 span=17 uses=1 mode=deep
+sa best=89 current=89 trial=1630 delta=-2 temp=1.729 type=0 span=40 uses=1 mode=deep
+sa best=85 current=85 trial=1725 delta=-4 temp=1.714 type=2 span=19 uses=1 mode=beam
+sa best=81 current=81 trial=2489 delta=-4 temp=1.477 type=1 span=44 uses=1 mode=deep
+sa best=80 current=80 trial=2492 delta=-1 temp=1.477 type=1 span=19 uses=1 mode=direct
+sa best=77 current=77 trial=3848 delta=-3 temp=0.886 type=2 span=19 uses=1 mode=beam
+sa final=77 current=77 elapsed_ms=1870 trials=5535 direct_trials=4050 beam_trials=1485 valid=210 accepted=199 improve=21 neutral=173 uphill=5 beam_deep=280 refresh=200 rebuild_reject=0 generated_total=23614 direct_pool_total=713 beam_pool_total=23614 prefilter_direct=713 prefilter_reject=22901 direct_valid=12 direct_event_fail=0 direct_use_fail=2575 direct_rejoin_fail=1463 direct_steps=81734 reroutes=658 beam_valid=198 beam_states=414782 raw=9296843 children=430668 rejoins=210

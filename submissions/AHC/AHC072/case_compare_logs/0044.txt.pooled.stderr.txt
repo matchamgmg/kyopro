@@ -1,0 +1,23 @@
+initial lookahead_baseline=495 build_ms=17 first_keep=20 setup_keep=8 alpha=1/4
+sa baseline=495
+sa best=494 current=494 trial=26 delta=-1 temp=2.035 type=1 span=155 uses=2 mode=direct
+sa best=493 current=493 trial=36 delta=-1 temp=1.999 type=1 span=174 uses=2 mode=direct
+sa best=486 current=486 trial=58 delta=-7 temp=1.879 type=0 span=25 uses=2 mode=beam
+sa best=458 current=458 trial=64 delta=-28 temp=1.833 type=1 span=60 uses=2 mode=deep
+sa best=457 current=457 trial=170 delta=-1 temp=1.585 type=1 span=125 uses=1 mode=direct
+sa best=456 current=456 trial=228 delta=-1 temp=1.438 type=1 span=40 uses=1 mode=direct
+sa best=455 current=455 trial=263 delta=-1 temp=1.415 type=1 span=16 uses=1 mode=beam
+sa best=454 current=454 trial=354 delta=-3 temp=1.356 type=1 span=12 uses=1 mode=beam
+sa best=453 current=453 trial=523 delta=-1 temp=1.232 type=1 span=1 uses=1 mode=direct
+sa best=452 current=452 trial=889 delta=-1 temp=0.915 type=1 span=14 uses=1 mode=deep
+sa best=450 current=450 trial=1231 delta=-2 temp=0.727 type=1 span=18 uses=2 mode=beam
+sa best=446 current=446 trial=2139 delta=-4 temp=0.351 type=1 span=36 uses=2 mode=deep
+sa best=445 current=445 trial=2160 delta=-1 temp=0.337 type=1 span=1 uses=1 mode=direct
+sa best=444 current=444 trial=2389 delta=-1 temp=0.284 type=0 span=20 uses=1 mode=deep
+sa best=443 current=443 trial=2579 delta=-1 temp=0.246 type=1 span=1 uses=1 mode=direct
+sa best=442 current=442 trial=2687 delta=-1 temp=0.227 type=1 span=13 uses=1 mode=beam
+sa best=441 current=441 trial=2704 delta=-1 temp=0.225 type=1 span=41 uses=1 mode=direct
+sa best=440 current=440 trial=2718 delta=-1 temp=0.222 type=1 span=1 uses=1 mode=direct
+sa best=435 current=435 trial=3180 delta=-5 temp=0.152 type=0 span=33 uses=2 mode=deep
+sa best=430 current=430 trial=4032 delta=-5 temp=0.084 type=0 span=34 uses=2 mode=deep
+sa final=430 current=430 elapsed_ms=1870 trials=4136 direct_trials=3698 beam_trials=438 valid=48 accepted=48 improve=20 neutral=27 uphill=1 beam_deep=84 refresh=49 rebuild_reject=0 generated_total=306972 direct_pool_total=8897 beam_pool_total=306972 prefilter_direct=8897 prefilter_reject=298075 direct_valid=13 direct_event_fail=0 direct_use_fail=666 direct_rejoin_fail=3019 direct_steps=424279 reroutes=1130 beam_valid=35 beam_states=134435 raw=9108579 children=139153 rejoins=48

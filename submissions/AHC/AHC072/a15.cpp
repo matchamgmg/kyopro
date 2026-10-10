@@ -1,0 +1,2595 @@
+#include <bits/stdc++.h>
+using namespace std;
+
+constexpr int MAX_ACTIONS = 100000;
+constexpr int TIME_LIMIT_MS = 1900;
+
+// fill8 / flushX 用の局所探索。
+// X = 7, 6, 5, 4 をすべて試し、完全解のうち最小手数を採用する。
+constexpr int LOCAL_ROUTE_HORIZON = 24;
+constexpr int LOCAL_SEARCH_DEPTH = 5;
+constexpr int LOCAL_BEAM_WIDTH = 64;
+constexpr int LOCAL_SETUP_CANDIDATE_LIMIT = 24;
+
+// 少数色どうしを2匹bundleにして、両色に共通する最短路区間を
+// 1つのtowerとして同時輸送する。
+constexpr int SMALL_COLOR_MAX_SLIMES = 7;
+constexpr int SMALL_BUNDLE_MIN_SHARED_LENGTH = 1;
+
+// 再利用可能なジャンプ台の将来価値。
+// 現在のflushだけでなく、後続flushが同じ台を使える場合に
+// 局所探索で少し余分なsetupコストを許容する。
+constexpr int REUSE_CREDIT_PER_LEVEL = 1;
+
+constexpr array<int, 4> DX = {-1, 1, 0, 0};
+constexpr array<int, 4> DY = {0, 0, -1, 1};
+constexpr array<char, 4> DIR_CHAR = {'U', 'D', 'L', 'R'};
+
+struct Problem {
+  int N, K;
+  vector<string> C;
+
+  Problem() {
+    cin >> N >> K;
+    C.resize(N);
+    for (auto &row : C)
+      cin >> row;
+  }
+};
+
+struct Action {
+  int x;
+  int y;
+  int k;
+  int d;
+  int l;
+
+  friend ostream &operator<<(ostream &os, const Action &a) {
+    return os << a.x << ' ' << a.y << ' ' << a.k << ' ' << DIR_CHAR[a.d] << ' ' << a.l;
+  }
+};
+
+struct Tree {
+  // adj[v] の bit d が立っていれば、d 方向に木の辺がある。
+  vector<uint8_t> adj;
+
+  // 巣を根とした情報。
+  vector<int> parent;
+  vector<int> depth;
+  vector<int> child_count;
+  vector<char> used;
+
+  int edge_count = 0;
+};
+
+struct SimulationResult {
+  bool success = false;
+  vector<Action> actions;
+};
+
+// 盤面は最大20x20、各towerは最大8段なので固定長で保持する。
+// vector<vector<int>> と違い、盤面コピー時にセルごとのheap allocationが発生しない。
+constexpr int MAX_CELLS = 20 * 20;
+
+struct Tower {
+  array<uint8_t, 8> slime{};
+  uint8_t height = 0;
+
+  bool empty() const {
+    return height == 0;
+  }
+  int size() const {
+    return (int)height;
+  }
+  int back() const {
+    return (int)slime[height - 1];
+  }
+  int operator[](int i) const {
+    return (int)slime[i];
+  }
+
+  void push_back(int color) {
+    assert(height < 8);
+    slime[height++] = (uint8_t)color;
+  }
+
+  void pop_back() {
+    assert(height > 0);
+    --height;
+  }
+};
+
+using Board = array<Tower, MAX_CELLS>;
+static_assert(is_trivially_copyable_v<Board>);
+
+struct Solver {
+  Problem P;
+  int V;
+
+  vector<int> nest;
+  vector<int> nest_color;
+  vector<vector<int>> terminals;
+  vector<Tree> trees;
+
+  // dist_to_nest[color][v]: v から color の巣までの最短距離。
+  vector<vector<int>> dist_to_nest;
+
+  // floor_dist[u][v]: 壁を避けた盤面上の全点対最短距離。
+  // flush経路上判定とジャンプ台再利用価値の推定に使う。
+  vector<vector<int>> floor_dist;
+
+  // shortest_path_demand[color][v]:
+  // 初期terminalのうち、v を通る最短路を持つものの個数。
+  // flush size ごとの再利用価値は、この需要を packet size で割って評価する。
+  vector<vector<int>> shortest_path_demand;
+
+  // flushの最短路領域は盤面状態に依存しないため、
+  // (active color, flush source) ごとに一度だけ構築して再利用する。
+  vector<vector<vector<int>>> flush_route_cache;
+  vector<vector<array<uint8_t, MAX_CELLS>>> flush_route_mask_cache;
+
+  // 現在試している fill8 / flushX の X。
+  // solve() から 7, 6, 5, 4 の順に切り替える。
+  int strategy_flush_size = 4;
+
+  struct BundleCandidate {
+    int color_a = -1;
+    int color_b = -1;
+    int source_a = -1;
+    int source_b = -1;
+    int meeting = -1;
+    int final_cell = -1;
+
+    // source は含めず、各操作の着地点を順に持つ。
+    vector<int> path_a;
+    vector<int> path_b;
+    vector<int> shared_path;
+
+    int shared_length = 0;
+    int setup_length = 0;
+  };
+
+  // 初期terminal同士について、少数色bundleの候補を事前計算する。
+  // 盤面上の占有状況はsimulate時に検査する。
+  vector<BundleCandidate> small_bundle_candidates;
+
+  mt19937 mt{0};
+  chrono::steady_clock::time_point start_time;
+
+  Solver() : V(P.N * P.N), start_time(chrono::steady_clock::now()) {
+    nest.assign(P.K, -1);
+    nest_color.assign(V, -1);
+    terminals.resize(P.K);
+
+    initialize_problem();
+    build_distances();
+    build_flush_route_cache();
+    build_all_trees();
+    build_small_bundle_candidates();
+  }
+
+  // =========================================================
+  // Grid
+  // =========================================================
+
+  int cell_id(int x, int y) const {
+    return x * P.N + y;
+  }
+
+  pair<int, int> cell_pos(int v) const {
+    return {v / P.N, v % P.N};
+  }
+
+  bool inside(int x, int y) const {
+    return 0 <= x && x < P.N && 0 <= y && y < P.N;
+  }
+
+  bool passable(int x, int y) const {
+    return inside(x, y) && P.C[x][y] != '#';
+  }
+
+  int next_cell(int v, int d) const {
+    auto [x, y] = cell_pos(v);
+    int nx = x + DX[d];
+    int ny = y + DY[d];
+    if (!passable(nx, ny))
+      return -1;
+    return cell_id(nx, ny);
+  }
+
+  int direction_between(int u, int v) const {
+    auto [ux, uy] = cell_pos(u);
+    auto [vx, vy] = cell_pos(v);
+
+    for (int d = 0; d < 4; ++d) {
+      if (ux + DX[d] == vx && uy + DY[d] == vy)
+        return d;
+    }
+    return -1;
+  }
+
+  bool time_over() const {
+    auto now = chrono::steady_clock::now();
+    auto elapsed = chrono::duration_cast<chrono::milliseconds>(now - start_time).count();
+    return elapsed >= TIME_LIMIT_MS;
+  }
+
+  // =========================================================
+  // Input / initial information
+  // =========================================================
+
+  void initialize_problem() {
+    for (int x = 0; x < P.N; ++x) {
+      for (int y = 0; y < P.N; ++y) {
+        int v = cell_id(x, y);
+        char c = P.C[x][y];
+
+        if ('A' <= c && c <= 'L') {
+          int color = c - 'A';
+          nest[color] = v;
+          nest_color[v] = color;
+        } else if ('a' <= c && c <= 'l') {
+          int color = c - 'a';
+          terminals[color].push_back(v);
+        }
+      }
+    }
+  }
+
+  // =========================================================
+  // Shortest path distances
+  // =========================================================
+
+  void build_distances() {
+    dist_to_nest.assign(P.K, vector<int>(V, INT_MAX));
+
+    for (int color = 0; color < P.K; ++color) {
+      queue<int> que;
+      int root = nest[color];
+      dist_to_nest[color][root] = 0;
+      que.push(root);
+
+      while (!que.empty()) {
+        int v = que.front();
+        que.pop();
+
+        for (int d = 0; d < 4; ++d) {
+          int nv = next_cell(v, d);
+          if (nv == -1)
+            continue;
+          if (dist_to_nest[color][nv] != INT_MAX)
+            continue;
+
+          dist_to_nest[color][nv] = dist_to_nest[color][v] + 1;
+          que.push(nv);
+        }
+      }
+    }
+
+    floor_dist.assign(V, vector<int>(V, INT_MAX));
+
+    for (int source = 0; source < V; ++source) {
+      auto [sx, sy] = cell_pos(source);
+      if (!passable(sx, sy))
+        continue;
+
+      queue<int> que;
+      floor_dist[source][source] = 0;
+      que.push(source);
+
+      while (!que.empty()) {
+        int v = que.front();
+        que.pop();
+
+        for (int d = 0; d < 4; ++d) {
+          int nv = next_cell(v, d);
+          if (nv == -1)
+            continue;
+          if (floor_dist[source][nv] != INT_MAX)
+            continue;
+
+          floor_dist[source][nv] = floor_dist[source][v] + 1;
+          que.push(nv);
+        }
+      }
+    }
+
+    // 各セルが、その色の何匹の初期terminalから巣への最短路に
+    // 含まれ得るかを数える。
+    // flush size は戦略ごとに変わるので、ここでは需要そのものだけ保存する。
+    shortest_path_demand.assign(P.K, vector<int>(V, 0));
+
+    for (int color = 0; color < P.K; ++color) {
+      for (int v = 0; v < V; ++v) {
+        if (dist_to_nest[color][v] == INT_MAX)
+          continue;
+
+        int demand = 0;
+        for (int u : terminals[color]) {
+          if (floor_dist[u][v] == INT_MAX)
+            continue;
+          if (floor_dist[u][v] + dist_to_nest[color][v] == dist_to_nest[color][u]) {
+            ++demand;
+          }
+        }
+
+        shortest_path_demand[color][v] = demand;
+      }
+    }
+  }
+
+  bool is_shortest_step(int color, int from, int to) const {
+    if (from < 0 || to < 0)
+      return false;
+    if (dist_to_nest[color][from] == INT_MAX)
+      return false;
+    return dist_to_nest[color][to] + 1 == dist_to_nest[color][from];
+  }
+
+  /**
+   * source -> v -> nest が最短路になるか。
+   */
+  bool on_some_shortest_path(int color, int source, int v) const {
+    if (source < 0 || v < 0)
+      return false;
+    if (floor_dist[source][v] == INT_MAX)
+      return false;
+    if (dist_to_nest[color][source] == INT_MAX || dist_to_nest[color][v] == INT_MAX) {
+      return false;
+    }
+
+    return floor_dist[source][v] + dist_to_nest[color][v] == dist_to_nest[color][source];
+  }
+
+  // =========================================================
+  // Greedy Steiner tree
+  // =========================================================
+
+  void add_tree_edge(Tree &tree, int u, int v) const {
+    int d = direction_between(u, v);
+    assert(d != -1);
+
+    uint8_t bu = uint8_t(1u << d);
+    uint8_t bv = uint8_t(1u << (d ^ 1));
+
+    if (!(tree.adj[u] & bu))
+      ++tree.edge_count;
+
+    tree.adj[u] |= bu;
+    tree.adj[v] |= bv;
+  }
+
+  bool has_tree_edge(const Tree &tree, int v, int d) const {
+    return (tree.adj[v] & uint8_t(1u << d)) != 0;
+  }
+
+  /**
+   * 巣だけから始め、現在の木全体を multi-source BFS の始点として、
+   * 木に最も近い未接続スライムを1体ずつ接続する。
+   *
+   * これを各色について固定木として一度だけ構築する。
+   */
+  Tree build_greedy_tree(int color) const {
+    Tree tree;
+    tree.adj.assign(V, 0);
+
+    vector<char> in_tree(V, false);
+    vector<char> is_terminal(V, false);
+
+    for (int v : terminals[color])
+      is_terminal[v] = true;
+
+    const int root = nest[color];
+    in_tree[root] = true;
+
+    while (true) {
+      bool finished = true;
+      for (int v : terminals[color]) {
+        if (!in_tree[v]) {
+          finished = false;
+          break;
+        }
+      }
+      if (finished)
+        break;
+
+      queue<int> que;
+      vector<int> prev(V, -2);
+
+      // 現在の木全体を始点にする。
+      for (int v = 0; v < V; ++v) {
+        if (!in_tree[v])
+          continue;
+        prev[v] = -1;
+        que.push(v);
+      }
+
+      int target = -1;
+
+      while (!que.empty()) {
+        int v = que.front();
+        que.pop();
+
+        if (is_terminal[v] && !in_tree[v]) {
+          target = v;
+          break;
+        }
+
+        for (int d = 0; d < 4; ++d) {
+          int nv = next_cell(v, d);
+          if (nv == -1)
+            continue;
+          if (prev[nv] != -2)
+            continue;
+
+          prev[nv] = v;
+          que.push(nv);
+        }
+      }
+
+      assert(target != -1);
+
+      int cur = target;
+      while (prev[cur] != -1) {
+        int p = prev[cur];
+        add_tree_edge(tree, cur, p);
+        in_tree[cur] = true;
+        in_tree[p] = true;
+        cur = p;
+      }
+    }
+
+    return tree;
+  }
+
+  void build_root_info(int color, Tree &tree) const {
+    tree.parent.assign(V, -2);
+    tree.depth.assign(V, -1);
+    tree.child_count.assign(V, 0);
+    tree.used.assign(V, false);
+
+    int root = nest[color];
+
+    queue<int> que;
+    tree.parent[root] = -1;
+    tree.depth[root] = 0;
+    tree.used[root] = true;
+    que.push(root);
+
+    while (!que.empty()) {
+      int v = que.front();
+      que.pop();
+
+      for (int d = 0; d < 4; ++d) {
+        if (!has_tree_edge(tree, v, d))
+          continue;
+
+        int nv = next_cell(v, d);
+        assert(nv != -1);
+
+        if (tree.parent[nv] != -2)
+          continue;
+
+        tree.parent[nv] = v;
+        tree.depth[nv] = tree.depth[v] + 1;
+        tree.used[nv] = true;
+        ++tree.child_count[v];
+        que.push(nv);
+      }
+    }
+  }
+
+  void build_all_trees() {
+    trees.resize(P.K);
+
+    for (int color = 0; color < P.K; ++color) {
+      trees[color] = build_greedy_tree(color);
+      build_root_info(color, trees[color]);
+    }
+  }
+
+  // =========================================================
+  // Simulation state helpers
+  // =========================================================
+
+  Board initial_board() const {
+    Board board{};
+
+    for (int color = 0; color < P.K; ++color) {
+      for (int v : terminals[color]) {
+        board[v].push_back(color);
+      }
+    }
+
+    return board;
+  }
+
+  int top_color(const Board &board, int v) const {
+    if (board[v].empty())
+      return -1;
+    return board[v].back();
+  }
+
+  int top_block_size(const Board &board, int v) const {
+    if (board[v].empty())
+      return 0;
+
+    int color = board[v].back();
+    int cnt = 0;
+
+    for (int i = (int)board[v].size() - 1; i >= 0 && board[v][i] == color; --i) {
+      ++cnt;
+    }
+
+    return cnt;
+  }
+
+  int count_color(const Board &board, int color) const {
+    int result = 0;
+    for (int v = 0; v < V; ++v) {
+      const auto &tower = board[v];
+      for (int i = 0; i < tower.size(); ++i) {
+        result += (tower[i] == color);
+      }
+    }
+    return result;
+  }
+
+  int count_all(const Board &board) const {
+    int result = 0;
+    for (int v = 0; v < V; ++v)
+      result += board[v].size();
+    return result;
+  }
+
+  void home_cell(Board &board, int v) const {
+    int color = nest_color[v];
+    if (color == -1)
+      return;
+
+    while (!board[v].empty() && board[v].back() == color) {
+      board[v].pop_back();
+    }
+  }
+
+  // =========================================================
+  // Actions
+  // =========================================================
+
+  bool execute_action(Board &board, vector<Action> &actions, int source, int moved_size, int destination) const {
+    if ((int)actions.size() >= MAX_ACTIONS)
+      return false;
+    if (board[source].empty())
+      return false;
+    if (!(1 <= moved_size && moved_size <= (int)board[source].size()))
+      return false;
+    if ((int)board[destination].size() + moved_size > 8)
+      return false;
+
+    auto [sx, sy] = cell_pos(source);
+    auto [tx, ty] = cell_pos(destination);
+
+    int d = -1;
+    int l = -1;
+
+    if (sx == tx) {
+      if (sy < ty) {
+        d = 3;
+        l = ty - sy;
+      } else if (ty < sy) {
+        d = 2;
+        l = sy - ty;
+      }
+    } else if (sy == ty) {
+      if (sx < tx) {
+        d = 1;
+        l = tx - sx;
+      } else if (tx < sx) {
+        d = 0;
+        l = sx - tx;
+      }
+    }
+
+    if (d == -1 || l <= 0)
+      return false;
+
+    int h = board[source].size();
+    int k = h - moved_size;
+
+    if (!(0 <= k && k < h))
+      return false;
+    if (l > k + 1)
+      return false;
+
+    // 通過マスはすべて床でなければならない。
+    int v = source;
+    for (int step = 0; step < l; ++step) {
+      v = next_cell(v, d);
+      if (v == -1)
+        return false;
+    }
+    if (v != destination)
+      return false;
+
+    actions.push_back({sx, sy, k, d, l});
+
+    // 上から取り出すので移動部分は反転する。
+    // 今回は同色blockのみを動かすため、色列としては変化しない。
+    for (int i = 0; i < moved_size; ++i) {
+      int color = board[source].back();
+      board[source].pop_back();
+      board[destination].push_back(color);
+    }
+
+    home_cell(board, source);
+    home_cell(board, destination);
+
+    return true;
+  }
+
+  /**
+   * source から根方向の「次の集約点」を返す。
+   *
+   * ・分岐点
+   * ・巣
+   *
+   * のうち最初に現れるもの。
+   */
+  int next_merge_point(int color, int source) const {
+    const auto &tree = trees[color];
+    int v = tree.parent[source];
+
+    while (v != -1) {
+      if (v == nest[color])
+        return v;
+      if (tree.child_count[v] >= 2)
+        return v;
+      v = tree.parent[v];
+    }
+
+    return -1;
+  }
+
+  /**
+   * full blockを動かす場合に合法な範囲で、
+   * 固定木上を根方向へできるだけ長くジャンプする。
+   *
+   * ただし、
+   * ・木が曲がる
+   * ・次の分岐点/巣に着く
+   * ・同色towerを見つける
+   * のいずれかで止める。
+   *
+   * 容量不足なら -1 を返し、1辺移動側の処理に任せる。
+   */
+  int find_jump_destination(const Board &board, int color, int source, int moved_size) const {
+    const auto &tree = trees[color];
+
+    int first_parent = tree.parent[source];
+    if (first_parent < 0)
+      return -1;
+
+    int direction = direction_between(source, first_parent);
+    if (direction == -1)
+      return -1;
+
+    int h = board[source].size();
+    int k = h - moved_size;
+    int max_jump = k + 1;
+
+    int merge_point = next_merge_point(color, source);
+
+    vector<int> candidates;
+    int v = source;
+
+    for (int l = 1; l <= max_jump; ++l) {
+      int p = tree.parent[v];
+      if (p < 0)
+        break;
+
+      if (direction_between(v, p) != direction)
+        break;
+
+      candidates.push_back(p);
+      v = p;
+
+      if (!board[v].empty() && top_color(board, v) == color)
+        break;
+      if (v == merge_point)
+        break;
+    }
+
+    for (int i = (int)candidates.size() - 1; i >= 0; --i) {
+      int destination = candidates[i];
+      if ((int)board[destination].size() + moved_size <= 8) {
+        return destination;
+      }
+    }
+
+    return -1;
+  }
+
+  /**
+   * flush packet 専用のジャンプ先探索。
+   *
+   * 通常輸送はGreedy Steiner treeに従うが、flush中だけは木を外れ、
+   * 巣への最短距離が1マスごとに必ず減少する直線だけを使う。
+   * したがって選ばれたジャンプ全体も必ず最短路上にある。
+   *
+   * packet_sizeは論理的に固定し、同色towerへ着地しても増やさない。
+   */
+  int find_flush_jump_destination(const Board &board, int color, int source, int packet_size) const {
+    if (dist_to_nest[color][source] == INT_MAX)
+      return -1;
+
+    int h = board[source].size();
+    int k = h - packet_size;
+    int max_jump = k + 1;
+
+    int best = -1;
+    int best_length = -1;
+    int best_base_height = -1;
+
+    for (int d = 0; d < 4; ++d) {
+      int v = source;
+
+      for (int l = 1; l <= max_jump; ++l) {
+        int nv = next_cell(v, d);
+        if (nv == -1)
+          break;
+
+        // 途中の各1マスが最短路方向でなければ、この方向は終了。
+        if (!is_shortest_step(color, v, nv))
+          break;
+
+        v = nv;
+
+        if ((int)board[v].size() + packet_size > 8)
+          continue;
+
+        int base_height = board[v].size();
+
+        // まず長いジャンプを優先。
+        // 同じ長さなら、次のジャンプ力を得やすい高い台を優先。
+        if (l > best_length || (l == best_length && base_height > best_base_height) ||
+            (l == best_length && base_height == best_base_height && v < best)) {
+          best = v;
+          best_length = l;
+          best_base_height = base_height;
+        }
+      }
+    }
+
+    return best;
+  }
+
+  vector<int> shortest_next_cells(const Board &board, int color, int source, int packet_size) const {
+    vector<int> result;
+
+    for (int d = 0; d < 4; ++d) {
+      int v = next_cell(source, d);
+      if (v == -1)
+        continue;
+      if (!is_shortest_step(color, source, v))
+        continue;
+      result.push_back(v);
+    }
+
+    sort(result.begin(), result.end(), [&](int a, int b) {
+      bool fit_a = (int)board[a].size() + packet_size <= 8;
+      bool fit_b = (int)board[b].size() + packet_size <= 8;
+      if (fit_a != fit_b)
+        return fit_a > fit_b;
+
+      int ha = board[a].size();
+      int hb = board[b].size();
+      if (ha != hb)
+        return ha > hb;
+      return a < b;
+    });
+
+    return result;
+  }
+
+  /**
+   * packet_size 匹を論理的にマージせず、そのまま巣まで送る。
+   *
+   * flush の本体では packet_size=4 を使う。
+   * 同色towerへ着地しても、次の操作で動かすのは上の packet_size 匹だけ。
+   *
+   * 前方の同色towerが容量不足なら、そのtowerの上4匹を先に flush して
+   * 空きを作ってから元のpacketを再開する。
+   */
+  bool flush_packet_to_nest_core(Board &board, vector<Action> &actions, int color, int source, int packet_size) const {
+    if (packet_size <= 0)
+      return true;
+    if ((int)actions.size() >= MAX_ACTIONS)
+      return false;
+
+    if (source == nest[color]) {
+      home_cell(board, source);
+      return true;
+    }
+
+    if (board[source].empty())
+      return false;
+    if (top_color(board, source) != color)
+      return false;
+    if (top_block_size(board, source) < packet_size)
+      return false;
+    if (dist_to_nest[color][source] == INT_MAX)
+      return false;
+
+    int destination = find_flush_jump_destination(board, color, source, packet_size);
+
+    if (destination != -1) {
+      if (!execute_action(board, actions, source, packet_size, destination)) {
+        return false;
+      }
+
+      if (destination == nest[color])
+        return true;
+
+      return flush_packet_to_nest_core(board, actions, color, destination, packet_size);
+    }
+
+    // 直線ジャンプができない場合も、Steiner treeには戻らず、
+    // 最短距離が1減る隣接マスのどれかへ進む。
+    vector<int> nexts = shortest_next_cells(board, color, source, packet_size);
+
+    // そのままpacket全体を受けられる最短路隣接点を優先。
+    for (int destination2 : nexts) {
+      int capacity = 8 - (int)board[destination2].size();
+      if (capacity < packet_size)
+        continue;
+
+      if (!execute_action(board, actions, source, packet_size, destination2)) {
+        continue;
+      }
+
+      if (destination2 == nest[color])
+        return true;
+
+      return flush_packet_to_nest_core(board, actions, color, destination2, packet_size);
+    }
+
+    // すべて容量不足なら、最短路方向にある同色towerを先にflushして
+    // 空きを作れる経路を試す。
+    for (int destination2 : nexts) {
+      if (board[destination2].empty())
+        continue;
+      if (top_color(board, destination2) != color)
+        continue;
+
+      int front_block = top_block_size(board, destination2);
+      if (front_block <= 0)
+        continue;
+
+      int front_flush = min(strategy_flush_size, front_block);
+      Board board_backup = board;
+      size_t action_size_backup = actions.size();
+
+      if (!flush_packet_to_nest_core(board, actions, color, destination2, front_flush)) {
+        board = std::move(board_backup);
+        actions.resize(action_size_backup);
+        continue;
+      }
+
+      return flush_packet_to_nest_core(board, actions, color, source, packet_size);
+    }
+
+    return false;
+  }
+
+  /**
+   * evaluate_flush_cost() 専用の action 適用。
+   *
+   * 実際の Action 列は不要なので vector<Action> を生成せず、
+   * 実行手数だけを action_count に加算する。
+   * 盤面更新・合法性判定・帰巣処理は execute_action() と同じ。
+   */
+  bool execute_action_count_only(Board &board, int &action_count, int source, int moved_size, int destination) const {
+    if (action_count >= MAX_ACTIONS)
+      return false;
+    if (board[source].empty())
+      return false;
+    if (!(1 <= moved_size && moved_size <= (int)board[source].size()))
+      return false;
+    if ((int)board[destination].size() + moved_size > 8)
+      return false;
+
+    auto [sx, sy] = cell_pos(source);
+    auto [tx, ty] = cell_pos(destination);
+
+    int d = -1;
+    int l = -1;
+
+    if (sx == tx) {
+      if (sy < ty) {
+        d = 3;
+        l = ty - sy;
+      } else if (ty < sy) {
+        d = 2;
+        l = sy - ty;
+      }
+    } else if (sy == ty) {
+      if (sx < tx) {
+        d = 1;
+        l = tx - sx;
+      } else if (tx < sx) {
+        d = 0;
+        l = sx - tx;
+      }
+    }
+
+    if (d == -1 || l <= 0)
+      return false;
+
+    int h = board[source].size();
+    int k = h - moved_size;
+
+    if (!(0 <= k && k < h))
+      return false;
+    if (l > k + 1)
+      return false;
+
+    int v = source;
+    for (int step = 0; step < l; ++step) {
+      v = next_cell(v, d);
+      if (v == -1)
+        return false;
+    }
+    if (v != destination)
+      return false;
+
+    ++action_count;
+
+    for (int i = 0; i < moved_size; ++i) {
+      int color = board[source].back();
+      board[source].pop_back();
+      board[destination].push_back(color);
+    }
+
+    home_cell(board, source);
+    home_cell(board, destination);
+
+    return true;
+  }
+
+  /**
+   * flush_packet_to_nest_core() の count-only 版。
+   *
+   * 遷移選択は通常版と完全に同じにし、Action オブジェクトだけを作らない。
+   * evaluate_flush_cost() から大量に呼ばれるため、探索情報を変えずに
+   * vector<Action> の確保・拡張・Action書き込みを除去する。
+   */
+  bool flush_packet_to_nest_count_only(Board &board, int &action_count, int color, int source, int packet_size) const {
+    if (packet_size <= 0)
+      return true;
+    if (action_count >= MAX_ACTIONS)
+      return false;
+
+    if (source == nest[color]) {
+      home_cell(board, source);
+      return true;
+    }
+
+    if (board[source].empty())
+      return false;
+    if (top_color(board, source) != color)
+      return false;
+    if (top_block_size(board, source) < packet_size)
+      return false;
+    if (dist_to_nest[color][source] == INT_MAX)
+      return false;
+
+    int destination = find_flush_jump_destination(board, color, source, packet_size);
+
+    if (destination != -1) {
+      if (!execute_action_count_only(board, action_count, source, packet_size, destination)) {
+        return false;
+      }
+
+      if (destination == nest[color])
+        return true;
+
+      return flush_packet_to_nest_count_only(board, action_count, color, destination, packet_size);
+    }
+
+    vector<int> nexts = shortest_next_cells(board, color, source, packet_size);
+
+    for (int destination2 : nexts) {
+      int capacity = 8 - (int)board[destination2].size();
+      if (capacity < packet_size)
+        continue;
+
+      if (!execute_action_count_only(board, action_count, source, packet_size, destination2)) {
+        continue;
+      }
+
+      if (destination2 == nest[color])
+        return true;
+
+      return flush_packet_to_nest_count_only(board, action_count, color, destination2, packet_size);
+    }
+
+    for (int destination2 : nexts) {
+      if (board[destination2].empty())
+        continue;
+      if (top_color(board, destination2) != color)
+        continue;
+
+      int front_block = top_block_size(board, destination2);
+      if (front_block <= 0)
+        continue;
+
+      int front_flush = min(strategy_flush_size, front_block);
+      Board board_backup = board;
+      int action_count_backup = action_count;
+
+      if (!flush_packet_to_nest_count_only(board, action_count, color, destination2, front_flush)) {
+        board = board_backup;
+        action_count = action_count_backup;
+        continue;
+      }
+
+      return flush_packet_to_nest_count_only(board, action_count, color, source, packet_size);
+    }
+
+    return false;
+  }
+
+  enum class LocalMoveType : uint8_t {
+    Flush,
+    Setup,
+  };
+
+  struct LocalMove {
+    LocalMoveType type = LocalMoveType::Setup;
+    int source = -1;
+    int destination = -1;
+    int moved_size = 0;
+  };
+
+  struct LocalState {
+    Board board{};
+
+    // 局所探索の深さは固定なので、操作列も固定長で持つ。
+    // vector の heap allocation / copy を避ける。
+    array<LocalMove, LOCAL_SEARCH_DEPTH> moves{};
+    uint8_t move_count = 0;
+
+    // board / flush_pos / flush_finished から計算した状態hash。
+    // beam選抜時に盤面全体を再走査してhashを作り直さない。
+    uint64_t hash = 0;
+
+    // 論理的なflushの現在位置。
+    int flush_pos = -1;
+    bool flush_finished = false;
+
+    // ここから最短路ベースの決定的flushを行った場合の残り手数。
+    int finish_cost = INT_MAX;
+
+    // move_count + finish_cost。
+    int total_cost = INT_MAX;
+
+    // 現在盤面に残っているactive colorの匹数。
+    // reuse_creditのfuture_use_capを差分更新するために保持する。
+    int active_remaining = 0;
+
+    // 後続flushで再利用できるplatformの将来価値。
+    int reuse_credit = 0;
+
+    // total_cost - (初期盤面から増えたreuse_credit)。
+    // 局所探索ではこの値も比較に使う。
+    int effective_cost = INT_MAX;
+
+    // beamの多様性維持用。大きいほど「将来platformになりそう」。
+    int potential = 0;
+  };
+
+  /**
+   * flush が今後通り得る「最短路領域」を列挙する。
+   *
+   * Steiner tree上の1本の経路ではなく、sourceから巣までの
+   * いずれかの最短路に含まれ、かつsourceからHORIZON以内のセルを全て含む。
+   */
+  void build_flush_route_cache() {
+    flush_route_cache.assign(P.K, vector<vector<int>>(V));
+    flush_route_mask_cache.assign(P.K, vector<array<uint8_t, MAX_CELLS>>(V));
+
+    for (int color = 0; color < P.K; ++color) {
+      for (int source = 0; source < V; ++source) {
+        auto &route = flush_route_cache[color][source];
+        auto &mask = flush_route_mask_cache[color][source];
+        mask.fill(0);
+
+        if (dist_to_nest[color][source] == INT_MAX)
+          continue;
+
+        for (int v = 0; v < V; ++v) {
+          if (v == source)
+            continue;
+          if (floor_dist[source][v] == INT_MAX)
+            continue;
+          if (floor_dist[source][v] > LOCAL_ROUTE_HORIZON)
+            continue;
+          if (!on_some_shortest_path(color, source, v))
+            continue;
+
+          route.push_back(v);
+          mask[v] = 1;
+        }
+
+        sort(route.begin(), route.end(), [&](int a, int b) {
+          int da = floor_dist[source][a];
+          int db = floor_dist[source][b];
+          if (da != db)
+            return da < db;
+          if (dist_to_nest[color][a] != dist_to_nest[color][b]) {
+            return dist_to_nest[color][a] > dist_to_nest[color][b];
+          }
+          return a < b;
+        });
+      }
+    }
+  }
+
+  const vector<int> &flush_route_cells(int color, int source) const {
+    return flush_route_cache[color][source];
+  }
+
+  const array<uint8_t, MAX_CELLS> &flush_route_mask(int color, int source) const {
+    return flush_route_mask_cache[color][source];
+  }
+
+  /**
+   * setup対象色のGreedy Steiner treeで v からparent方向へ進んだとき、
+   * flushの最短路領域へ初めて到達するまでの辺数。
+   */
+  int steps_to_route(int color, int v, const array<uint8_t, MAX_CELLS> &on_route, int max_steps) const {
+    if (!trees[color].used[v])
+      return -1;
+
+    int cur = v;
+    for (int step = 0; step <= max_steps; ++step) {
+      if (on_route[cur])
+        return step;
+
+      int p = trees[color].parent[cur];
+      if (p < 0)
+        break;
+      cur = p;
+    }
+
+    return -1;
+  }
+
+  /**
+   * 現在の盤面で、platformが後続flushにも使われる見込みを概算する。
+   *
+   * platformが、残っているactive colorスライムの位置から巣への
+   * いずれかの最短路上にあるなら、そのスライム数を需要として数える。
+   * 4匹につきflushを1回とみなし、現在のflush1回分を除いた回数を
+   * 「再利用回数」とする。
+   */
+  int estimated_extra_platform_uses(const Board &board, int active_color, int platform) const {
+    (void)board;
+    if (platform < 0 || platform >= V)
+      return 0;
+
+    int demand = shortest_path_demand[active_color][platform];
+    return max(0, demand / strategy_flush_size - 1);
+  }
+
+  int count_color_in_tower(const Tower &tower, int color) const {
+    int result = 0;
+    for (int i = 0; i < tower.size(); ++i) {
+      result += (tower[i] == color);
+    }
+    return result;
+  }
+
+  int future_platform_use_cap(int active_remaining) const {
+    return max(0, active_remaining / strategy_flush_size - 1);
+  }
+
+  /**
+   * 1セルが reusable_platform_credit に寄与する値。
+   *
+   * future_use_cap が変わらない遷移では source / destination の2セルだけ
+   * 再計算すれば、盤面全走査なしでcreditを厳密に差分更新できる。
+   */
+  int reusable_platform_cell_credit(const Board &board, int active_color, int v, int future_use_cap) const {
+    if (future_use_cap <= 0)
+      return 0;
+    if (v < 0 || v >= V)
+      return 0;
+    if (board[v].empty())
+      return 0;
+
+    int color = top_color(board, v);
+    if (color < 0 || color == active_color)
+      return 0;
+    if (top_block_size(board, v) != (int)board[v].size())
+      return 0;
+
+    int h = board[v].size();
+    int platform_max_height = 8 - strategy_flush_size;
+    if (!(1 <= h && h <= platform_max_height))
+      return 0;
+
+    int extra_uses = min(estimated_extra_platform_uses(board, active_color, v), future_use_cap);
+    return extra_uses * h * REUSE_CREDIT_PER_LEVEL;
+  }
+
+  /**
+   * 盤面上に残る再利用可能platformの将来価値。
+   *
+   * active_remaining は呼び出し側で保持し、count_color() の盤面全走査を
+   * 毎回行わない。future_use_cap が変わった場合の再構築時だけ全セルを見る。
+   */
+  int reusable_platform_credit(const Board &board, int active_color, int active_remaining) const {
+    int future_use_cap = future_platform_use_cap(active_remaining);
+    if (future_use_cap == 0)
+      return 0;
+
+    int credit = 0;
+    for (int v = 0; v < V; ++v) {
+      credit += reusable_platform_cell_credit(board, active_color, v, future_use_cap);
+    }
+    return credit;
+  }
+
+  /**
+   * flush自身が次に行える操作を全て列挙する。
+   * packet_size=4は論理的に固定し、同色towerへ着地しても
+   * packetを大きくしない。
+   */
+  vector<LocalMove> generate_flush_moves(const Board &board, int color, int flush_pos) const {
+    vector<LocalMove> result;
+
+    if (flush_pos == nest[color])
+      return result;
+    if (board[flush_pos].empty())
+      return result;
+    if (top_color(board, flush_pos) != color)
+      return result;
+    if (top_block_size(board, flush_pos) < strategy_flush_size)
+      return result;
+    if (dist_to_nest[color][flush_pos] == INT_MAX)
+      return result;
+
+    int h = board[flush_pos].size();
+    int k = h - strategy_flush_size;
+    int max_jump = k + 1;
+
+    struct Candidate {
+      LocalMove move;
+      int length = 0;
+      int base_height = 0;
+      int reuse = 0;
+    };
+    vector<Candidate> candidates;
+
+    for (int d = 0; d < 4; ++d) {
+      int v = flush_pos;
+
+      for (int l = 1; l <= max_jump; ++l) {
+        int nv = next_cell(v, d);
+        if (nv == -1)
+          break;
+        if (!is_shortest_step(color, v, nv))
+          break;
+
+        v = nv;
+
+        if ((int)board[v].size() + strategy_flush_size > 8)
+          continue;
+
+        int reuse = 0;
+        if (!board[v].empty() && top_color(board, v) != color && top_block_size(board, v) == (int)board[v].size() &&
+            (int)board[v].size() <= 8 - strategy_flush_size) {
+          reuse = estimated_extra_platform_uses(board, color, v);
+        }
+
+        candidates.push_back({
+            {LocalMoveType::Flush, flush_pos, v, strategy_flush_size},
+            l,
+            (int)board[v].size(),
+            reuse,
+        });
+      }
+    }
+
+    // 直接の進行量を最優先し、同程度なら再利用価値のあるplatform着地を優先。
+    sort(candidates.begin(), candidates.end(), [](const Candidate &a, const Candidate &b) {
+      if (a.length != b.length)
+        return a.length > b.length;
+      if (a.reuse != b.reuse)
+        return a.reuse > b.reuse;
+      if (a.base_height != b.base_height)
+        return a.base_height > b.base_height;
+      return a.move.destination < b.move.destination;
+    });
+
+    result.reserve(candidates.size());
+    for (const auto &candidate : candidates) {
+      result.push_back(candidate.move);
+    }
+
+    return result;
+  }
+
+  /**
+   * 他色をplatform候補へ運ぶ1手を列挙する。
+   *
+   * 以前は「flush最短路領域に隣接したスライムを1手で直接載せる」だけだった。
+   * 今回は最大5手程度先読みするため、他色自身のGreedy Steiner treeを
+   * parent方向へ1辺ずつ進める中間操作も探索対象にする。
+   *
+   * 条件:
+   * ・active colorは動かさない
+   * ・移動元は純粋な同色tower
+   * ・移動先も空、または同じ色の純粋tower
+   * ・setup中のtower高さは4以下
+   * ・その色のparent列をたどると、残り探索手数以内にflush最短路領域へ到達する
+   *
+   * これにより、例えば経路から4マス離れた他色スライムも
+   * 4手使ってplatform位置まで運べる。
+   */
+  vector<LocalMove> generate_setup_moves(const Board &board, int active_color, int flush_pos,
+                                         int remaining_depth) const {
+    vector<LocalMove> result;
+    if (remaining_depth <= 0)
+      return result;
+
+    const auto &on_route = flush_route_mask(active_color, flush_pos);
+
+    struct CandidateMove {
+      LocalMove move;
+      int route_dist = INT_MAX;
+      int reaches_route = 0;
+      int moved_size = 0;
+    };
+    vector<CandidateMove> candidates;
+
+    for (int source = 0; source < V; ++source) {
+      if (source == flush_pos)
+        continue;
+      if (board[source].empty())
+        continue;
+
+      int color = top_color(board, source);
+      if (color < 0 || color == active_color)
+        continue;
+
+      // setupで扱うtowerは純粋towerだけ。
+      if (top_block_size(board, source) != (int)board[source].size()) {
+        continue;
+      }
+
+      if (!trees[color].used[source])
+        continue;
+
+      int destination = trees[color].parent[source];
+      if (destination < 0)
+        continue;
+      if (destination == flush_pos)
+        continue;
+
+      // 自身の巣へ入れると消えてplatform材料にならない。
+      if (destination == nest[color])
+        continue;
+
+      // sourceからrouteへ向かうparent列が、残り手数内に存在するものだけ。
+      int source_dist = steps_to_route(color, source, on_route, remaining_depth);
+      if (source_dist < 0)
+        continue;
+
+      int destination_dist = steps_to_route(color, destination, on_route, remaining_depth);
+
+      // route上のtowerをroute外へ持ち出さない。
+      // route外なら、必ず1歩routeへ近づく操作だけを許す。
+      if (source_dist == 0) {
+        if (destination_dist != 0)
+          continue;
+      } else {
+        if (destination_dist != source_dist - 1)
+          continue;
+      }
+
+      int destination_color = top_color(board, destination);
+
+      // active colorを他色で覆わない。
+      if (destination_color == active_color)
+        continue;
+
+      // 空マス、または同色の純粋towerにだけ積む。
+      if (!board[destination].empty()) {
+        if (destination_color != color)
+          continue;
+        if (top_block_size(board, destination) != (int)board[destination].size()) {
+          continue;
+        }
+      }
+
+      // flush packetを載せたとき高さ8以下になるよう、
+      // setup towerは高さ (8 - flush_size) 以下に抑える。
+      int capacity = (8 - strategy_flush_size) - (int)board[destination].size();
+      if (capacity <= 0)
+        continue;
+
+      int moved_size = min((int)board[source].size(), capacity);
+      if (moved_size <= 0)
+        continue;
+
+      CandidateMove candidate;
+      candidate.move = {
+          LocalMoveType::Setup,
+          source,
+          destination,
+          moved_size,
+      };
+      candidate.route_dist = destination_dist;
+      candidate.reaches_route = (destination_dist == 0);
+      candidate.moved_size = moved_size;
+      candidates.push_back(candidate);
+    }
+
+    // 分岐数を抑える。
+    // まずrouteへ実際に到達する手、次にrouteまで近い手を優先。
+    sort(candidates.begin(), candidates.end(), [](const CandidateMove &a, const CandidateMove &b) {
+      if (a.reaches_route != b.reaches_route) {
+        return a.reaches_route > b.reaches_route;
+      }
+      if (a.route_dist != b.route_dist) {
+        return a.route_dist < b.route_dist;
+      }
+      if (a.moved_size != b.moved_size) {
+        return a.moved_size > b.moved_size;
+      }
+      if (a.move.destination != b.move.destination) {
+        return a.move.destination < b.move.destination;
+      }
+      return a.move.source < b.move.source;
+    });
+
+    if ((int)candidates.size() > LOCAL_SETUP_CANDIDATE_LIMIT) {
+      candidates.resize(LOCAL_SETUP_CANDIDATE_LIMIT);
+    }
+
+    result.reserve(candidates.size());
+    for (const auto &candidate : candidates) {
+      result.push_back(candidate.move);
+    }
+    return result;
+  }
+
+  int evaluate_flush_cost(const Board &board, int color, int source, int packet_size) const {
+    if (source == nest[color])
+      return 0;
+
+    Board copied = board;
+    int action_count = 0;
+
+    if (!flush_packet_to_nest_count_only(copied, action_count, color, source, packet_size)) {
+      return INT_MAX;
+    }
+
+    return action_count;
+  }
+
+  /**
+   * beamのtie-break用。
+   *
+   * ・flush経路上に既に存在する高さ1..4の他色tower
+   * ・数手以内にflush経路へ到達できる他色tower
+   *
+   * を高く評価する。
+   * 「最初の数手ではまだflush手数が減らないが、数手後にplatformが完成する」
+   * 状態をbeamから落としにくくするための値。
+   */
+  int platform_potential(const Board &board, int active_color, int flush_pos, int remaining_depth,
+                         int reuse_credit) const {
+    if (flush_pos == nest[active_color])
+      return 0;
+
+    const auto &route = flush_route_cells(active_color, flush_pos);
+    const auto &on_route = flush_route_mask(active_color, flush_pos);
+
+    int score = 0;
+
+    // すでに最短路領域上にあるplatform。
+    for (int v : route) {
+      if (board[v].empty())
+        continue;
+
+      int color = top_color(board, v);
+      if (color == active_color)
+        continue;
+      if (top_block_size(board, v) != (int)board[v].size())
+        continue;
+      if ((int)board[v].size() > 8 - strategy_flush_size)
+        continue;
+
+      int h = board[v].size();
+      int progress = floor_dist[flush_pos][v];
+      int extra_uses = estimated_extra_platform_uses(board, active_color, v);
+
+      score += 100 * h;
+      score += max(0, 30 - progress);
+
+      // 後続flushでも使えそうな台は強く残す。
+      score += 160 * extra_uses * h;
+    }
+
+    if (remaining_depth > 0) {
+      // まだrouteに到達していないが、数手でplatformになれるtower。
+      for (int v = 0; v < V; ++v) {
+        if (board[v].empty())
+          continue;
+        int color = top_color(board, v);
+        if (color < 0 || color == active_color)
+          continue;
+        if (top_block_size(board, v) != (int)board[v].size())
+          continue;
+        if ((int)board[v].size() > 8 - strategy_flush_size)
+          continue;
+        if (on_route[v])
+          continue;
+
+        int dist = steps_to_route(color, v, on_route, remaining_depth);
+        if (dist <= 0)
+          continue;
+
+        score += max(0, remaining_depth - dist + 1) * (int)board[v].size() * 4;
+      }
+    }
+
+    // route以外も含め、後続flushで再利用されるplatform全体の価値を加える。
+    // reuse_credit は LocalState で厳密に差分更新済み。
+    score += 80 * reuse_credit;
+
+    return score;
+  }
+
+  uint64_t hash_local_state(const LocalState &state) const {
+    uint64_t h = 1469598103934665603ULL;
+    auto mix = [&](uint64_t x) {
+      h ^= x + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
+      h *= 1099511628211ULL;
+    };
+
+    mix((uint64_t)(state.flush_pos + 1));
+    mix((uint64_t)state.flush_finished);
+
+    for (int v = 0; v < V; ++v) {
+      if (state.board[v].empty())
+        continue;
+      mix((uint64_t)(v + 1));
+      mix((uint64_t)state.board[v].size());
+      for (int i = 0; i < state.board[v].size(); ++i) {
+        mix((uint64_t)(state.board[v][i] + 1));
+      }
+    }
+
+    return h;
+  }
+
+  /**
+   * 「setupを先に全部行ってからflush」ではなく、
+   * flush操作と他色setup操作を同じ探索木に入れて最大5手程度先読みする。
+   *
+   * 例えば
+   *   setup -> setup -> flush -> setup -> flush -> ...
+   * のような途中挿入も探索できる。
+   *
+   * 各探索状態からは、最後に最短路ベースの決定的flushを行った場合の
+   * 残り手数を正確に計算する。
+   * したがって評価値は
+   *
+   *   ここまでの局所操作数 + 残りflush手数
+   *
+   * となる。
+   */
+  vector<LocalMove> search_platform_plan(const Board &board, int color, int source) const {
+    int baseline = evaluate_flush_cost(board, color, source, strategy_flush_size);
+    if (baseline == INT_MAX)
+      return {};
+
+    vector<LocalMove> best_plan;
+
+    const int baseline_active_remaining = count_color(board, color);
+    const int baseline_reuse_credit = reusable_platform_credit(board, color, baseline_active_remaining);
+    int best_effective = baseline;
+    int best_total = baseline;
+
+    LocalState initial;
+    initial.board = board;
+    initial.flush_pos = source;
+    initial.flush_finished = false;
+    initial.finish_cost = baseline;
+    initial.total_cost = baseline;
+    initial.active_remaining = baseline_active_remaining;
+    initial.reuse_credit = baseline_reuse_credit;
+    initial.effective_cost = baseline;
+    initial.potential = platform_potential(board, color, source, LOCAL_SEARCH_DEPTH, initial.reuse_credit);
+    initial.hash = hash_local_state(initial);
+
+    vector<LocalState> beam;
+    beam.push_back(std::move(initial));
+
+    for (int depth = 0; depth < LOCAL_SEARCH_DEPTH; ++depth) {
+      vector<LocalState> next;
+      next.reserve(LOCAL_BEAM_WIDTH * 12);
+      unordered_set<uint64_t> seen;
+      seen.reserve(LOCAL_BEAM_WIDTH * 32);
+
+      for (const auto &state : beam) {
+        if (state.flush_finished)
+          continue;
+
+        vector<LocalMove> moves = generate_flush_moves(state.board, color, state.flush_pos);
+
+        int remaining_after_this = LOCAL_SEARCH_DEPTH - (depth + 1);
+
+        auto setup_moves = generate_setup_moves(state.board, color, state.flush_pos, remaining_after_this + 1);
+
+        moves.insert(moves.end(), setup_moves.begin(), setup_moves.end());
+
+        for (const auto &move : moves) {
+          LocalState child;
+          child.board = state.board;
+          child.moves = state.moves;
+          child.move_count = state.move_count;
+          child.flush_pos = state.flush_pos;
+          child.flush_finished = state.flush_finished;
+          child.active_remaining = state.active_remaining;
+
+          // 1手で盤面が変わるのは source / destination の2セルだけ。
+          // active color残数とreuse creditを、この2セルの差分だけで更新する。
+          const int old_future_use_cap = future_platform_use_cap(state.active_remaining);
+
+          int active_before = count_color_in_tower(state.board[move.source], color);
+          int old_credit = reusable_platform_cell_credit(state.board, color, move.source, old_future_use_cap);
+
+          if (move.destination != move.source) {
+            active_before += count_color_in_tower(state.board[move.destination], color);
+            old_credit += reusable_platform_cell_credit(state.board, color, move.destination, old_future_use_cap);
+          }
+
+          vector<Action> dummy;
+          if (!execute_action(child.board, dummy, move.source, move.moved_size, move.destination)) {
+            continue;
+          }
+
+          int active_after = count_color_in_tower(child.board[move.source], color);
+          if (move.destination != move.source) {
+            active_after += count_color_in_tower(child.board[move.destination], color);
+          }
+          child.active_remaining += active_after - active_before;
+
+          const int new_future_use_cap = future_platform_use_cap(child.active_remaining);
+
+          if (new_future_use_cap == old_future_use_cap) {
+            int new_credit = reusable_platform_cell_credit(child.board, color, move.source, new_future_use_cap);
+            if (move.destination != move.source) {
+              new_credit += reusable_platform_cell_credit(child.board, color, move.destination, new_future_use_cap);
+            }
+            child.reuse_credit = state.reuse_credit - old_credit + new_credit;
+          } else {
+            // flushが巣へ到達してfuture_use_cap自体が変化した場合は、
+            // 全platformのclamp値が変わり得るため、この稀な場合だけ全走査する。
+            child.reuse_credit = reusable_platform_credit(child.board, color, child.active_remaining);
+          }
+
+          if (child.move_count >= LOCAL_SEARCH_DEPTH)
+            continue;
+          child.moves[child.move_count++] = move;
+
+          if (move.type == LocalMoveType::Flush) {
+            child.flush_pos = move.destination;
+            if (move.destination == nest[color]) {
+              child.flush_finished = true;
+            }
+          }
+
+          // 同一depthでは move_count は全状態で同じ。
+          // board / flush_pos / flush_finished が同じなら、以降の評価値と
+          // 探索可能な遷移も同じなので、重い評価より先に重複排除する。
+          child.hash = hash_local_state(child);
+          if (!seen.insert(child.hash).second)
+            continue;
+
+          if (child.flush_finished) {
+            child.finish_cost = 0;
+          } else {
+            child.finish_cost = evaluate_flush_cost(child.board, color, child.flush_pos, strategy_flush_size);
+          }
+
+          if (child.finish_cost == INT_MAX) {
+            child.total_cost = INT_MAX;
+            child.effective_cost = INT_MAX;
+          } else {
+            child.total_cost = (int)child.move_count + child.finish_cost;
+
+            int extra_reuse_credit = max(0, child.reuse_credit - baseline_reuse_credit);
+
+            child.effective_cost = child.total_cost - extra_reuse_credit;
+
+            // 現在のflushだけなら少し損でも、後続flushで再利用できる
+            // platformを作れるなら採用候補にする。
+            if (child.effective_cost < best_effective ||
+                (child.effective_cost == best_effective && child.total_cost < best_total)) {
+              best_effective = child.effective_cost;
+              best_total = child.total_cost;
+              best_plan.assign(child.moves.begin(), child.moves.begin() + child.move_count);
+            }
+          }
+
+          child.potential =
+              platform_potential(child.board, color, child.flush_pos, remaining_after_this, child.reuse_credit);
+
+          next.push_back(std::move(child));
+        }
+      }
+
+      if (next.empty())
+        break;
+
+      // まず「現在すでに良い」状態を半分残す。
+      // 全候補を完全sortする必要はなく、必要な上位だけpartial_sortする。
+      const auto cost_cmp = [](const LocalState &a, const LocalState &b) {
+        if (a.effective_cost != b.effective_cost) {
+          return a.effective_cost < b.effective_cost;
+        }
+        if (a.total_cost != b.total_cost)
+          return a.total_cost < b.total_cost;
+        if (a.finish_cost != b.finish_cost)
+          return a.finish_cost < b.finish_cost;
+        if (a.reuse_credit != b.reuse_credit)
+          return a.reuse_credit > b.reuse_credit;
+        if (a.potential != b.potential)
+          return a.potential > b.potential;
+        return a.move_count < b.move_count;
+      };
+
+      vector<LocalState> selected;
+      selected.reserve(LOCAL_BEAM_WIDTH);
+      unordered_set<uint64_t> selected_hash;
+      selected_hash.reserve(LOCAL_BEAM_WIDTH * 2);
+
+      const int cost_quota = LOCAL_BEAM_WIDTH / 2;
+      const int cost_take = min(cost_quota, (int)next.size());
+      partial_sort(next.begin(), next.begin() + cost_take, next.end(), cost_cmp);
+
+      for (int i = 0; i < cost_take; ++i) {
+        const auto &state = next[i];
+        if (!selected_hash.insert(state.hash).second)
+          continue;
+        selected.push_back(state);
+      }
+
+      // 残り半分は、まだ直接得になっていなくてもplatform形成の
+      // 見込みが大きい状態を残す。
+      // すでに選んだ状態は高々 cost_quota 個なので、potential順の
+      // 上位 LOCAL_BEAM_WIDTH 個だけ分かれば、残り枠を必ず埋められる。
+      const auto potential_cmp = [](const LocalState &a, const LocalState &b) {
+        if (a.potential != b.potential)
+          return a.potential > b.potential;
+        if (a.reuse_credit != b.reuse_credit)
+          return a.reuse_credit > b.reuse_credit;
+        if (a.effective_cost != b.effective_cost) {
+          return a.effective_cost < b.effective_cost;
+        }
+        if (a.total_cost != b.total_cost)
+          return a.total_cost < b.total_cost;
+        if (a.finish_cost != b.finish_cost)
+          return a.finish_cost < b.finish_cost;
+        return a.move_count < b.move_count;
+      };
+
+      const int potential_take = min(LOCAL_BEAM_WIDTH, (int)next.size());
+      partial_sort(next.begin(), next.begin() + potential_take, next.end(), potential_cmp);
+
+      for (int i = 0; i < potential_take && (int)selected.size() < LOCAL_BEAM_WIDTH; ++i) {
+        const auto &state = next[i];
+        if (!selected_hash.insert(state.hash).second)
+          continue;
+        selected.push_back(state);
+      }
+
+      beam = std::move(selected);
+    }
+
+    return best_plan;
+  }
+
+  /**
+   * flush packetをflushする。
+   *
+   * 最大5手程度、flush自身の移動と他色のsetupを混ぜて局所探索する。
+   * 探索で得なprefixが見つかった場合はその操作列を実行し、
+   * 残りは最短路ベースの決定的flushで巣まで送る。
+   */
+  bool flush_with_platform_search(Board &board, vector<Action> &actions, int color, int source) const {
+    if (top_block_size(board, source) < strategy_flush_size)
+      return false;
+
+    vector<LocalMove> plan = search_platform_plan(board, color, source);
+    int flush_pos = source;
+
+    for (const auto &move : plan) {
+      if (!execute_action(board, actions, move.source, move.moved_size, move.destination)) {
+        return false;
+      }
+
+      if (move.type == LocalMoveType::Flush) {
+        flush_pos = move.destination;
+        if (flush_pos == nest[color]) {
+          return true;
+        }
+      }
+    }
+
+    return flush_packet_to_nest_core(board, actions, color, flush_pos, strategy_flush_size);
+  }
+
+  /**
+   * active color のtop blockを1段階進める。
+   *
+   * 基本はGreedy Steiner tree上を通常マージ。
+   * tower全体が高さ8になったら、上X段だけをflushして
+   * 下側をfill用の集積blockとして残す。
+   *
+   * また、前方同色towerへfull blockを載せられない場合は、
+   * currentの一部をparentへ入れて高さ8までfillした後、
+   * parentの上X段をflushする。
+   */
+  bool advance_one(Board &board, vector<Action> &actions, int color, int source) const {
+    if (source == nest[color])
+      return false;
+    if (board[source].empty())
+      return false;
+    if (top_color(board, source) != color)
+      return false;
+    if (!trees[color].used[source])
+      return false;
+
+    int block_size = top_block_size(board, source);
+    if (block_size <= 0)
+      return false;
+
+    // 高さ8のtowerができたら、上X段を先に流す。
+    // 下側（または下側の残り）は後続blockを受けるfill地点として残す。
+    if ((int)board[source].size() == 8 && block_size >= strategy_flush_size) {
+      return flush_with_platform_search(board, actions, color, source);
+    }
+
+    // full blockのまま進めるなら通常のSteiner集約を優先する。
+    int jump_destination = find_jump_destination(board, color, source, block_size);
+
+    if (jump_destination != -1) {
+      return execute_action(board, actions, source, block_size, jump_destination);
+    }
+
+    int parent = trees[color].parent[source];
+    if (parent < 0)
+      return false;
+
+    int capacity = 8 - (int)board[parent].size();
+
+    // 同色の前方towerへfull blockが入らない。
+    // currentから必要分をfillして高さ8を作り、上X段をflushする。
+    if (!board[parent].empty() && top_color(board, parent) == color && capacity < block_size) {
+      int need = capacity;
+
+      if (need > 0) {
+        if (!execute_action(board, actions, source, need, parent)) {
+          return false;
+        }
+      }
+
+      if ((int)board[parent].size() != 8)
+        return false;
+      if (top_block_size(board, parent) < strategy_flush_size)
+        return false;
+
+      return flush_with_platform_search(board, actions, color, parent);
+    }
+
+    if (capacity <= 0)
+      return false;
+
+    // 他色tower上では入る分だけ載せる。
+    // 局所探索で作るplatformは高さ4以下なので、
+    // 4匹blockなら最大高さ8のジャンプ台になる。
+    int moved_size = min(block_size, capacity);
+    if (moved_size <= 0)
+      return false;
+
+    return execute_action(board, actions, source, moved_size, parent);
+  }
+
+  // =========================================================
+  // Small-color mixed bundles
+  // =========================================================
+
+  /**
+   * source -> target を、その色の巣への最短路方向だけを使って1マスずつ進む
+   * 経路を1本復元する。返り値は source を含まず target を含む。
+   */
+  vector<int> shortest_forward_path(int color, int source, int target) const {
+    if (source == target)
+      return {};
+    if (!on_some_shortest_path(color, source, target))
+      return {};
+
+    vector<int> prev(V, -1);
+    queue<int> que;
+    prev[source] = source;
+    que.push(source);
+
+    while (!que.empty() && prev[target] == -1) {
+      int v = que.front();
+      que.pop();
+
+      for (int d = 0; d < 4; ++d) {
+        int nv = next_cell(v, d);
+        if (nv == -1)
+          continue;
+        if (prev[nv] != -1)
+          continue;
+        if (!is_shortest_step(color, v, nv))
+          continue;
+
+        // target へ最短路のまま到達できる領域だけをたどる。
+        if (floor_dist[nv][target] == INT_MAX)
+          continue;
+        if (floor_dist[nv][target] + dist_to_nest[color][target] != dist_to_nest[color][nv]) {
+          continue;
+        }
+
+        prev[nv] = v;
+        que.push(nv);
+      }
+    }
+
+    if (prev[target] == -1)
+      return {};
+
+    vector<int> path;
+    int cur = target;
+    while (cur != source) {
+      path.push_back(cur);
+      cur = prev[cur];
+    }
+    reverse(path.begin(), path.end());
+    return path;
+  }
+
+  /**
+   * color_a / color_b の双方にとって最短路方向となる辺だけで進み、
+   * 最終的に両方のGreedy Steiner tree上へ戻れる最長suffixを求める。
+   *
+   * dp[v] = vから安全な終了セルまで進める最大手数。
+   * 両色の距離が毎手1ずつ減るため、このグラフはDAGになる。
+   */
+  pair<vector<int>, vector<int>> build_common_suffix_dp(int color_a, int color_b) const {
+    constexpr int NEG = -1000000;
+    vector<int> memo(V, INT_MIN);
+    vector<int> next_best(V, -1);
+
+    auto safe_final = [&](int v) {
+      if (!trees[color_a].used[v] || !trees[color_b].used[v])
+        return false;
+      if (v == nest[color_a] || v == nest[color_b])
+        return false;
+      return true;
+    };
+
+    auto dfs = [&](auto &&self, int v) -> int {
+      int &res = memo[v];
+      if (res != INT_MIN)
+        return res;
+
+      res = safe_final(v) ? 0 : NEG;
+      next_best[v] = -1;
+
+      for (int d = 0; d < 4; ++d) {
+        int nv = next_cell(v, d);
+        if (nv == -1)
+          continue;
+        if (!is_shortest_step(color_a, v, nv))
+          continue;
+        if (!is_shortest_step(color_b, v, nv))
+          continue;
+
+        int tail = self(self, nv);
+        if (tail < 0)
+          continue;
+
+        int cand = 1 + tail;
+        if (cand > res || (cand == res && (next_best[v] == -1 || nv < next_best[v]))) {
+          res = cand;
+          next_best[v] = nv;
+        }
+      }
+
+      return res;
+    };
+
+    for (int v = 0; v < V; ++v) {
+      auto [x, y] = cell_pos(v);
+      if (!passable(x, y))
+        continue;
+      dfs(dfs, v);
+    }
+
+    return {std::move(memo), std::move(next_best)};
+  }
+
+  /**
+   * 少数色の初期terminal 2体を、双方の巣へ近づく方向だけでmeetingへ集め、
+   * その後は両色に共通する最短路を2色混合towerとして運ぶ候補を作る。
+   *
+   * shared区間の終点は両色のSteiner tree上に限定するため、bundle終了後は
+   * 既存のcolor-fixed処理へそのまま戻せる。
+   */
+  void build_small_bundle_candidates() {
+    small_bundle_candidates.clear();
+
+    for (int color_a = 0; color_a < P.K; ++color_a) {
+      if (terminals[color_a].empty())
+        continue;
+      if ((int)terminals[color_a].size() > SMALL_COLOR_MAX_SLIMES)
+        continue;
+
+      for (int color_b = color_a + 1; color_b < P.K; ++color_b) {
+        if (terminals[color_b].empty())
+          continue;
+        if ((int)terminals[color_b].size() > SMALL_COLOR_MAX_SLIMES)
+          continue;
+
+        auto [common_len, common_next] = build_common_suffix_dp(color_a, color_b);
+
+        for (int source_a : terminals[color_a]) {
+          for (int source_b : terminals[color_b]) {
+            struct MeetingChoice {
+              int meeting = -1;
+              int shared_length = -1;
+              int setup_length = INT_MAX;
+            };
+
+            vector<MeetingChoice> choices;
+            choices.reserve(V);
+
+            for (int meeting = 0; meeting < V; ++meeting) {
+              if (common_len[meeting] < SMALL_BUNDLE_MIN_SHARED_LENGTH)
+                continue;
+              if (!on_some_shortest_path(color_a, source_a, meeting))
+                continue;
+              if (!on_some_shortest_path(color_b, source_b, meeting))
+                continue;
+
+              int setup = floor_dist[source_a][meeting] + floor_dist[source_b][meeting];
+              choices.push_back({meeting, common_len[meeting], setup});
+            }
+
+            sort(choices.begin(), choices.end(), [](const MeetingChoice &x, const MeetingChoice &y) {
+              if (x.shared_length != y.shared_length) {
+                return x.shared_length > y.shared_length;
+              }
+              if (x.setup_length != y.setup_length) {
+                return x.setup_length < y.setup_length;
+              }
+              return x.meeting < y.meeting;
+            });
+
+            // 最良meetingが他のbundleで塞がれる場合もあるため、
+            // 端点pairごとに上位4候補を保持しておく。
+            if ((int)choices.size() > 4)
+              choices.resize(4);
+
+            for (const auto &choice : choices) {
+              BundleCandidate candidate;
+              candidate.color_a = color_a;
+              candidate.color_b = color_b;
+              candidate.source_a = source_a;
+              candidate.source_b = source_b;
+              candidate.meeting = choice.meeting;
+              candidate.shared_length = choice.shared_length;
+              candidate.setup_length = choice.setup_length;
+
+              candidate.path_a = shortest_forward_path(color_a, source_a, choice.meeting);
+              candidate.path_b = shortest_forward_path(color_b, source_b, choice.meeting);
+
+              if (source_a != choice.meeting && candidate.path_a.empty())
+                continue;
+              if (source_b != choice.meeting && candidate.path_b.empty())
+                continue;
+
+              int cur = choice.meeting;
+              for (int step = 0; step < choice.shared_length; ++step) {
+                int nv = common_next[cur];
+                if (nv < 0) {
+                  candidate.shared_path.clear();
+                  break;
+                }
+                candidate.shared_path.push_back(nv);
+                cur = nv;
+              }
+
+              if ((int)candidate.shared_path.size() != choice.shared_length) {
+                continue;
+              }
+
+              candidate.final_cell = candidate.shared_path.back();
+              small_bundle_candidates.push_back(std::move(candidate));
+            }
+          }
+        }
+      }
+    }
+
+    // shared区間が長いものを先に使う。同値ならsetupが短いものを優先する。
+    sort(small_bundle_candidates.begin(), small_bundle_candidates.end(),
+         [](const BundleCandidate &a, const BundleCandidate &b) {
+           if (a.shared_length != b.shared_length) {
+             return a.shared_length > b.shared_length;
+           }
+           if (a.setup_length != b.setup_length) {
+             return a.setup_length < b.setup_length;
+           }
+           if (a.color_a != b.color_a)
+             return a.color_a < b.color_a;
+           if (a.color_b != b.color_b)
+             return a.color_b < b.color_b;
+           if (a.source_a != b.source_a)
+             return a.source_a < b.source_a;
+           if (a.source_b != b.source_b)
+             return a.source_b < b.source_b;
+           return a.meeting < b.meeting;
+         });
+  }
+
+  bool is_exact_singleton(const Board &board, int v, int color) const {
+    return board[v].size() == 1 && board[v].back() == color;
+  }
+
+  bool is_exact_two_color_bundle(const Board &board, int v, int color_a, int color_b) const {
+    if (board[v].size() != 2)
+      return false;
+    int x = board[v][0];
+    int y = board[v][1];
+    return (x == color_a && y == color_b) || (x == color_b && y == color_a);
+  }
+
+  /**
+   * 1匹をpathに沿って1マスずつ移動する。
+   * 最終meetingだけは、既に待っているもう1色のsingleton上への着地を許す。
+   */
+  bool move_singleton_along_path(Board &board, vector<Action> &actions, int color, int source, const vector<int> &path,
+                                 int meeting, bool allow_meeting_occupied) const {
+    int cur = source;
+    if (path.empty())
+      return cur == meeting;
+
+    for (int i = 0; i < (int)path.size(); ++i) {
+      int destination = path[i];
+      bool is_last = (i + 1 == (int)path.size());
+
+      if (!is_exact_singleton(board, cur, color))
+        return false;
+
+      if (is_last && destination == meeting && allow_meeting_occupied) {
+        if (board[destination].size() != 1)
+          return false;
+      } else {
+        if (!board[destination].empty())
+          return false;
+      }
+
+      if (!execute_action(board, actions, cur, 1, destination))
+        return false;
+      cur = destination;
+    }
+
+    return cur == meeting;
+  }
+
+  /**
+   * 1つのbundle候補を試す。
+   *
+   * meetingでの上下順は、shared区間を移動した後にcolor_orderで先に処理する
+   * 色がtopになるように決める。whole tower移動は毎回反転するので、
+   * shared_lengthの偶奇も考慮する。
+   */
+  bool try_apply_small_bundle(Board &board, vector<Action> &actions, const BundleCandidate &candidate,
+                              const vector<int> &order_rank) const {
+    const int a = candidate.color_a;
+    const int b = candidate.color_b;
+
+    if (!is_exact_singleton(board, candidate.source_a, a))
+      return false;
+    if (!is_exact_singleton(board, candidate.source_b, b))
+      return false;
+
+    // shared終点は既存color-fixedへ戻すため両色の木上である必要がある。
+    if (!trees[a].used[candidate.final_cell] || !trees[b].used[candidate.final_cell]) {
+      return false;
+    }
+
+    int desired_top = (order_rank[a] < order_rank[b]) ? a : b;
+
+    // meetingがsourceそのものなら上下順は固定される。
+    // そうでなければ、先にmeetingへ入れる色(bottom)を自由に選べる。
+    int bottom_color = -1;
+    int top_color_initial = -1;
+
+    if (candidate.meeting == candidate.source_a) {
+      bottom_color = a;
+      top_color_initial = b;
+    } else if (candidate.meeting == candidate.source_b) {
+      bottom_color = b;
+      top_color_initial = a;
+    } else {
+      // sharedをL回whole-moveすると、Lが奇数なら上下が反転する。
+      // final topをdesired_topにするようmeeting時の上下を決める。
+      if (candidate.shared_length % 2 == 0) {
+        top_color_initial = desired_top;
+        bottom_color = (desired_top == a ? b : a);
+      } else {
+        bottom_color = desired_top;
+        top_color_initial = (desired_top == a ? b : a);
+      }
+    }
+
+    int final_top = (candidate.shared_length % 2 == 0) ? top_color_initial : bottom_color;
+    if (final_top != desired_top)
+      return false;
+
+    Board backup_board = board;
+    size_t backup_actions = actions.size();
+
+    auto rollback = [&]() {
+      board = backup_board;
+      actions.resize(backup_actions);
+      return false;
+    };
+
+    const vector<int> *bottom_path = nullptr;
+    const vector<int> *top_path = nullptr;
+    int bottom_source = -1;
+    int top_source = -1;
+
+    if (bottom_color == a) {
+      bottom_source = candidate.source_a;
+      bottom_path = &candidate.path_a;
+      top_source = candidate.source_b;
+      top_path = &candidate.path_b;
+    } else {
+      bottom_source = candidate.source_b;
+      bottom_path = &candidate.path_b;
+      top_source = candidate.source_a;
+      top_path = &candidate.path_a;
+    }
+
+    // meetingが既にbottomのsourceなら移動不要。
+    if (bottom_source != candidate.meeting) {
+      if (!board[candidate.meeting].empty())
+        return rollback();
+      if (!move_singleton_along_path(board, actions, bottom_color, bottom_source, *bottom_path, candidate.meeting,
+                                     false)) {
+        return rollback();
+      }
+    }
+
+    if (!is_exact_singleton(board, candidate.meeting, bottom_color)) {
+      return rollback();
+    }
+
+    // top側をmeetingへ送り、2色towerを作る。
+    if (top_source == candidate.meeting) {
+      // meetingがtop側sourceなら、bottomを後から載せる必要があり、
+      // ここまでのbottom-first手順とは一致しない。上下固定ケースでは
+      // bottom_source==meetingになるので通常ここには来ない。
+      return rollback();
+    }
+
+    if (!move_singleton_along_path(board, actions, top_color_initial, top_source, *top_path, candidate.meeting, true)) {
+      return rollback();
+    }
+
+    if (!is_exact_two_color_bundle(board, candidate.meeting, a, b)) {
+      return rollback();
+    }
+    if (board[candidate.meeting].back() != top_color_initial) {
+      return rollback();
+    }
+
+    // 以後はbundle全体2匹を共通最短路上で移動する。
+    int cur = candidate.meeting;
+    for (int destination : candidate.shared_path) {
+      if (!board[destination].empty())
+        return rollback();
+      if (!is_exact_two_color_bundle(board, cur, a, b))
+        return rollback();
+
+      if (!execute_action(board, actions, cur, 2, destination)) {
+        return rollback();
+      }
+      cur = destination;
+    }
+
+    if (cur != candidate.final_cell)
+      return rollback();
+    if (!is_exact_two_color_bundle(board, cur, a, b))
+      return rollback();
+    if (board[cur].back() != desired_top)
+      return rollback();
+
+    return true;
+  }
+
+  /**
+   * 少数色bundleをshared_lengthの長い候補から貪欲に挿入する。
+   * 各候補は初期singletonを材料にするため、同じスライムは自然に1回しか使われない。
+   * 占有セルと衝突した候補は単にスキップする。
+   */
+  void apply_small_color_bundles(Board &board, vector<Action> &actions, const vector<int> &color_order) const {
+    if (small_bundle_candidates.empty())
+      return;
+
+    vector<int> order_rank(P.K, P.K);
+    for (int i = 0; i < (int)color_order.size(); ++i) {
+      order_rank[color_order[i]] = i;
+    }
+
+    for (const auto &candidate : small_bundle_candidates) {
+      if ((int)actions.size() >= MAX_ACTIONS)
+        break;
+      try_apply_small_bundle(board, actions, candidate, order_rank);
+    }
+  }
+
+  // =========================================================
+  // One color
+  // =========================================================
+
+  int deepest_active_cell(const Board &board, int color) const {
+    int best = -1;
+    int best_depth = -1;
+    int best_block_size = -1;
+
+    for (int v = 0; v < V; ++v) {
+      if (board[v].empty())
+        continue;
+      if (top_color(board, v) != color)
+        continue;
+      if (!trees[color].used[v])
+        continue;
+      if (v == nest[color])
+        continue;
+
+      int depth = trees[color].depth[v];
+      int block_size = top_block_size(board, v);
+
+      // 葉側から処理して、分岐点で自然にマージさせる。
+      if (depth > best_depth || (depth == best_depth && block_size < best_block_size) ||
+          (depth == best_depth && block_size == best_block_size && v < best)) {
+        best = v;
+        best_depth = depth;
+        best_block_size = block_size;
+      }
+    }
+
+    return best;
+  }
+
+  bool solve_one_color(Board &board, vector<Action> &actions, int color) const {
+    while (count_color(board, color) > 0) {
+      if ((int)actions.size() >= MAX_ACTIONS)
+        return false;
+
+      int source = deepest_active_cell(board, color);
+
+      // current color が盤面に残っているのにtopに存在しないなら失敗。
+      // 一色ずつ処理する設計では原理上起きない。
+      if (source == -1)
+        return false;
+
+      if (!advance_one(board, actions, color, source))
+        return false;
+    }
+
+    return true;
+  }
+
+  // =========================================================
+  // One color order
+  // =========================================================
+
+  SimulationResult simulate(const vector<int> &color_order, bool use_small_bundles) const {
+    Board board = initial_board();
+    vector<Action> actions;
+    actions.reserve(4096);
+
+    if (use_small_bundles) {
+      apply_small_color_bundles(board, actions, color_order);
+    }
+
+    for (int color : color_order) {
+      if (!solve_one_color(board, actions, color)) {
+        return {false, {}};
+      }
+    }
+
+    if (count_all(board) != 0) {
+      return {false, {}};
+    }
+
+    return {true, std::move(actions)};
+  }
+
+  // =========================================================
+  // Color order search
+  // =========================================================
+
+  void try_order(const vector<int> &order, int flush_size, set<vector<int>> &seen, long long &trial_count,
+                 SimulationResult &strategy_best, SimulationResult &global_best) {
+    if (!seen.insert(order).second)
+      return;
+    ++trial_count;
+
+    strategy_flush_size = flush_size;
+
+    // 現行color-fixed解を必ず残し、その同じ色順に少数色bundleを入れた解も
+    // 時間が残っていれば試す。bundleが悪化してもbaselineを失わない。
+    auto result = simulate(order, false);
+
+    if (!small_bundle_candidates.empty() && !time_over()) {
+      auto bundled = simulate(order, true);
+      if (bundled.success && (!result.success || bundled.actions.size() < result.actions.size())) {
+        result = std::move(bundled);
+      }
+    }
+
+    if (!result.success)
+      return;
+
+    if (!strategy_best.success || result.actions.size() < strategy_best.actions.size()) {
+      strategy_best = result;
+    }
+
+    if (!global_best.success || result.actions.size() < global_best.actions.size()) {
+      global_best = std::move(result);
+    }
+  }
+
+  long long permutation_count_cap(int n, long long cap) const {
+    long long result = 1;
+    for (int i = 2; i <= n; ++i) {
+      if (result > cap / i)
+        return cap;
+      result *= i;
+    }
+    return result;
+  }
+
+  vector<Action> solve() {
+    constexpr array<int, 4> FLUSH_SIZES = {7, 6, 5, 4};
+
+    SimulationResult best;
+    array<SimulationResult, 4> strategy_best;
+    array<set<vector<int>>, 4> seen;
+    array<long long, 4> trial_count{};
+
+    vector<vector<int>> seed_orders;
+
+    vector<int> order(P.K);
+    iota(order.begin(), order.end(), 0);
+    seed_orders.push_back(order);
+
+    reverse(order.begin(), order.end());
+    seed_orders.push_back(order);
+
+    iota(order.begin(), order.end(), 0);
+    sort(order.begin(), order.end(), [&](int a, int b) {
+      if (terminals[a].size() != terminals[b].size()) {
+        return terminals[a].size() > terminals[b].size();
+      }
+      return a < b;
+    });
+    seed_orders.push_back(order);
+
+    reverse(order.begin(), order.end());
+    seed_orders.push_back(order);
+
+    /**
+     * まず4戦略すべてを少なくとも1回は試す。
+     * これにより fill8/flush7,6,5,4 のどれかが未評価のまま
+     * 時間切れになることを避ける。
+     */
+    for (int i = 0; i < 4; ++i) {
+      try_order(seed_orders[0], FLUSH_SIZES[i], seen[i], trial_count[i], strategy_best[i], best);
+    }
+
+    // 残りの代表的な色順も、戦略間で公平にround-robinする。
+    for (int seed = 1; seed < (int)seed_orders.size(); ++seed) {
+      for (int i = 0; i < 4; ++i) {
+        if (time_over())
+          break;
+        try_order(seed_orders[seed], FLUSH_SIZES[i], seen[i], trial_count[i], strategy_best[i], best);
+      }
+      if (time_over())
+        break;
+    }
+
+    if (P.K >= 2) {
+      const long long all_orders = permutation_count_cap(P.K, 1000000000LL);
+
+      int strategy_index = 0;
+
+      // 残り時間は4戦略をround-robinしながら色順探索に使う。
+      while (!time_over()) {
+        bool all_finished = true;
+        for (int i = 0; i < 4; ++i) {
+          if ((long long)seen[i].size() < all_orders) {
+            all_finished = false;
+            break;
+          }
+        }
+        if (all_finished)
+          break;
+
+        int i = strategy_index;
+        strategy_index = (strategy_index + 1) % 4;
+
+        if ((long long)seen[i].size() == all_orders)
+          continue;
+
+        iota(order.begin(), order.end(), 0);
+        shuffle(order.begin(), order.end(), mt);
+
+        try_order(order, FLUSH_SIZES[i], seen[i], trial_count[i], strategy_best[i], best);
+      }
+    }
+
+    long long total_trials = 0;
+    for (int i = 0; i < 4; ++i) {
+      total_trials += trial_count[i];
+      cerr << "fill8/flush" << FLUSH_SIZES[i] << ": ";
+      if (strategy_best[i].success) {
+        cerr << strategy_best[i].actions.size() << " actions";
+      } else {
+        cerr << "no complete solution";
+      }
+      cerr << ", trials=" << trial_count[i] << '\n';
+    }
+    cerr << "total trials=" << total_trials << '\n';
+
+    if (!best.success) {
+      // 念のため時間制限とは無関係に、flush4 + 基本色順を最後に試す。
+      strategy_flush_size = 4;
+      best = simulate(seed_orders[0], false);
+    }
+
+    return best.actions;
+  }
+};
+
+int main() {
+  ios::sync_with_stdio(false);
+  cin.tie(nullptr);
+
+  Solver solver;
+  auto answer = solver.solve();
+
+  for (const auto &action : answer) {
+    cout << action << '\n';
+  }
+
+  return 0;
+}

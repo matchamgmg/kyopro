@@ -1,0 +1,20 @@
+initial lookahead_baseline=359 build_ms=7 first_keep=20 setup_keep=8 alpha=1/4
+sa baseline=359
+sa best=358 current=358 trial=190 delta=-1 temp=1.971 type=0 span=31 uses=2 mode=deep
+sa best=355 current=355 trial=302 delta=-3 temp=1.906 type=0 span=19 uses=1 mode=beam
+sa best=354 current=354 trial=739 delta=-1 temp=1.385 type=0 span=19 uses=1 mode=beam
+sa best=344 current=344 trial=871 delta=-10 temp=1.316 type=0 span=30 uses=2 mode=deep
+sa best=343 current=343 trial=887 delta=-1 temp=1.300 type=0 span=10 uses=1 mode=beam
+sa best=342 current=342 trial=1380 delta=-1 temp=1.098 type=0 span=35 uses=1 mode=beam
+sa best=340 current=340 trial=1584 delta=-2 temp=1.036 type=0 span=75 uses=1 mode=beam
+sa best=339 current=339 trial=1718 delta=-1 temp=0.980 type=0 span=8 uses=1 mode=deep
+sa best=338 current=338 trial=1974 delta=-1 temp=0.910 type=0 span=50 uses=1 mode=beam
+sa best=335 current=335 trial=2876 delta=-3 temp=0.583 type=0 span=20 uses=1 mode=deep
+sa best=331 current=331 trial=3087 delta=-4 temp=0.530 type=0 span=15 uses=2 mode=deep
+sa best=329 current=329 trial=3375 delta=-2 temp=0.477 type=2 span=20 uses=1 mode=deep
+sa best=328 current=328 trial=3496 delta=-1 temp=0.472 type=0 span=22 uses=1 mode=beam
+sa best=327 current=327 trial=4314 delta=-1 temp=0.355 type=1 span=17 uses=1 mode=beam
+sa best=324 current=324 trial=5454 delta=-3 temp=0.224 type=0 span=36 uses=1 mode=deep
+sa best=321 current=321 trial=5911 delta=-3 temp=0.186 type=0 span=21 uses=1 mode=beam
+sa best=317 current=317 trial=6243 delta=-4 temp=0.163 type=0 span=25 uses=1 mode=deep
+sa final=317 current=317 elapsed_ms=1870 trials=8065 direct_trials=7281 beam_trials=784 valid=92 accepted=87 improve=19 neutral=67 uphill=1 beam_deep=176 refresh=88 rebuild_reject=0 generated_total=269369 direct_pool_total=9960 beam_pool_total=269369 prefilter_direct=9960 prefilter_reject=259409 direct_valid=8 direct_event_fail=0 direct_use_fail=2900 direct_rejoin_fail=4373 direct_steps=610278 reroutes=1733 beam_valid=84 beam_states=252427 raw=9146345 children=261264 rejoins=92
